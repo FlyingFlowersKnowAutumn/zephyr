@@ -1,0 +1,54 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: dev
+        group: blog-group
+      config:
+        server-addr: localhost:8848
+        namespace: dev
+        group: blog-group
+        file-extension: yaml
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/auth/**,/api/v1/users/**,/api/v1/about/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+      default-filters:
+        - name: Retry
+          args:
+            retries: 3
+            methods: GET
+            statuses: BAD_GATEWAY,GATEWAY_TIMEOUT
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+jwt:
+  secret: CHANGE_ME_USE_ENV_JWT_SECRET
+  expiration: 900000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
