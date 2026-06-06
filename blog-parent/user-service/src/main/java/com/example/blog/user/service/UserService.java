@@ -104,6 +104,8 @@ public class UserService {
         return UserDTO.builder()
                 .id(user.getId().toString())
                 .username(user.getUsername())
+                .displayName(user.getDisplayName())
+                .bio(user.getBio())
                 .email(user.getEmail())
                 .avatarUrl(user.getAvatarUrl())
                 .role(user.getRole())

@@ -1,233 +1,138 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useAuth } from '@/composables/useAuth'
+import { onMounted, ref } from 'vue'
+import { useArticleStore } from '@/stores/article'
+import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
+import ArticleCard from '@/components/common/ArticleCard.vue'
+import SeoHead from '@/components/seo/SeoHead.vue'
+import { RouterLink } from 'vue-router'
 
-const { user, isLoggedIn, logout, fetchUser } = useAuth()
+const emit = defineEmits(['open-search'])
 
-onMounted(() => {
-  fetchUser()
+const articleStore = useArticleStore()
+const articles = ref<any[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+  const result = await articleStore.fetchArticles({ page: 1, size: 8, status: 'PUBLISHED' })
+  articles.value = result.articles
+  loading.value = false
 })
 </script>
 
 <template>
-  <div class="home-container">
-    <header class="header">
-      <div class="logo">
-        <span class="text-gradient">技术博客</span>
+  <LayoutWrapper heroTitle="我的博客" heroSubtitle="记录技术与生活" :showSidebar="true" @open-search="emit('open-search')">
+    <SeoHead />
+
+    <section class="home-content">
+
+      <div v-if="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <p>加载中...</p>
       </div>
-      <nav class="nav">
-        <a href="/" class="nav-link active">首页</a>
-        <a href="/write" class="nav-link">写文章</a>
-        <a href="/profile" class="nav-link">个人中心</a>
-      </nav>
-      <div class="auth-section">
-        <span v-if="user" class="user-info">
-          {{ user.isGuest ? user.displayName : user.username }}
-        </span>
-        <button v-if="isLoggedIn" class="logout-btn" @click="logout">
-          退出
-        </button>
-        <a v-else href="/login" class="login-link">登录</a>
+
+      <div v-else-if="articles.length === 0" class="empty-state">
+        <p>还没有文章，快去写第一篇吧</p>
+        <RouterLink to="/write" class="write-btn">开始写作</RouterLink>
       </div>
-    </header>
-    
-    <main class="main-content">
-      <section class="hero">
-        <h1>欢迎来到我的技术博客</h1>
-        <p>记录技术成长，分享编程心得</p>
-      </section>
-      
-      <section class="articles-section">
-        <h2>最新文章</h2>
-        <div class="article-list">
-          <div class="article-card">
-            <h3>第一篇文章</h3>
-            <p>这是文章摘要...</p>
-            <span class="date">2024-01-01</span>
-          </div>
-          <div class="article-card">
-            <h3>第二篇文章</h3>
-            <p>这是文章摘要...</p>
-            <span class="date">2024-01-02</span>
-          </div>
-          <div class="article-card">
-            <h3>第三篇文章</h3>
-            <p>这是文章摘要...</p>
-            <span class="date">2024-01-03</span>
-          </div>
-        </div>
-      </section>
-    </main>
-    
-    <footer class="footer">
-      <p>© 2024 个人技术博客</p>
-    </footer>
-  </div>
+
+      <div v-else class="articles-list">
+        <ArticleCard 
+          v-for="article in articles" 
+          :key="article.id" 
+          :article="article"
+        />
+      </div>
+
+      <div v-if="articles.length > 0" class="view-more-section">
+        <RouterLink to="/articles" class="view-more-btn">查看全部文章</RouterLink>
+      </div>
+    </section>
+  </LayoutWrapper>
 </template>
 
 <style lang="scss" scoped>
-.home-container {
-  min-height: 100vh;
-  background: var(--color-bg-primary);
-  display: flex;
-  flex-direction: column;
+.home-content {
+  max-width: 700px;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 2rem;
-  background: rgba(22, 35, 55, 0.8);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.logo {
-  font-size: 1.25rem;
-  font-weight: 700;
-}
-
-.nav {
-  display: flex;
-  gap: 2rem;
-}
-
-.nav-link {
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  transition: color 0.3s;
-  
-  &:hover, &.active {
-    color: var(--color-accent);
-  }
-}
-
-.auth-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-info {
-  color: var(--color-text-secondary);
-  font-size: 0.875rem;
-}
-
-.logout-btn {
-  padding: 0.5rem 1rem;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid var(--color-error);
-  border-radius: 6px;
-  color: var(--color-error);
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: background 0.3s;
-  
-  &:hover {
-    background: rgba(239, 68, 68, 0.3);
-  }
-}
-
-.login-link {
-  padding: 0.5rem 1rem;
-  background: rgba(0, 212, 255, 0.2);
-  border: 1px solid var(--color-accent);
-  border-radius: 6px;
-  color: var(--color-accent);
-  text-decoration: none;
-  font-size: 0.875rem;
-  transition: background 0.3s;
-  
-  &:hover {
-    background: rgba(0, 212, 255, 0.3);
-  }
-}
-
-.main-content {
-  flex: 1;
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.hero {
+.loading {
   text-align: center;
-  margin-bottom: 3rem;
-  
-  h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-  }
-  
-  p {
-    color: var(--color-text-secondary);
-  }
+  padding: 4rem 2rem;
+  color: var(--color-text-secondary);
 }
 
-.articles-section {
-  h2 {
-    font-size: 1.5rem;
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 6rem 2rem;
+
+  p {
     margin-bottom: 1.5rem;
+    color: var(--color-text-secondary);
+    font-size: 1rem;
   }
 }
 
-.article-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
+.write-btn {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  background: var(--color-accent);
+  color: white;
+  border-radius: var(--border-radius);
+  font-size: 0.95rem;
 
-.article-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 1.5rem;
-  transition: transform 0.3s, box-shadow 0.3s;
-  
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-card);
-  }
-  
-  h3 {
-    font-size: 1.125rem;
-    margin-bottom: 0.5rem;
-    color: var(--color-text-primary);
-  }
-  
-  p {
-    color: var(--color-text-secondary);
-    font-size: 0.875rem;
-    margin-bottom: 1rem;
-  }
-  
-  .date {
-    font-size: 0.75rem;
-    color: var(--color-text-secondary);
+    text-decoration: none;
+    opacity: 0.9;
   }
 }
 
-.footer {
+.articles-list {
+  margin-bottom: 3rem;
+}
+
+.view-more-section {
   text-align: center;
-  padding: 1.5rem;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: 0.875rem;
+  padding-top: 1rem;
+}
+
+.view-more-btn {
+  display: inline-block;
+  padding: 0.875rem 2.5rem;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  border-radius: var(--border-radius);
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all var(--transition-default);
+
+  &:hover {
+    background: var(--color-accent);
+    color: white;
+    text-decoration: none;
+  }
 }
 
 @media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    gap: 1rem;
+  .home-content {
+    padding: 0 0.5rem;
   }
-  
-  .nav {
-    gap: 1rem;
-  }
-  
-  .article-list {
-    grid-template-columns: 1fr;
+
+  .content-header h2 {
+    font-size: 1.6rem;
   }
 }
 </style>

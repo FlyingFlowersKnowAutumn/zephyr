@@ -31,6 +31,8 @@
         <module>blog-common</module>
         <module>api-gateway</module>
         <module>user-service</module>
+        <module>article-service</module>
+        <module>interaction-service</module>
     </modules>
 
     <dependencyManagement>

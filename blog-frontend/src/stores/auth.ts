@@ -1,48 +1,78 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi, register as registerApi, getCurrentUser } from '@/api/auth'
 import type { LoginDTO, RegisterDTO, UserDTO, LoginResponseDTO } from '@/types'
+import * as authApi from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
-  const user = ref<UserDTO | null>(null)
+  const refreshToken = ref<string | null>(localStorage.getItem('refreshToken'))
+  const savedUser = localStorage.getItem('user')
+  const user = ref<UserDTO | null>(savedUser ? JSON.parse(savedUser) : null)
   const isLoggedIn = computed(() => !!token.value)
-  
+  const error = ref('')
+
   async function login(dto: LoginDTO): Promise<LoginResponseDTO> {
-    const response = await loginApi(dto)
-    token.value = response.data.token
-    user.value = response.data.user
-    localStorage.setItem('token', response.data.token)
-    localStorage.setItem('refreshToken', response.data.refreshToken)
-    return response.data
+    error.value = ''
+    const result = await authApi.login(dto)
+    if (result.code !== 0 || !result.data) {
+      error.value = result.message || '登录失败'
+      throw new Error(error.value)
+    }
+
+    token.value = result.data.token
+    refreshToken.value = result.data.refreshToken
+    user.value = result.data.user
+    localStorage.setItem('token', result.data.token)
+    localStorage.setItem('refreshToken', result.data.refreshToken)
+    localStorage.setItem('user', JSON.stringify(result.data.user))
+    return result.data
   }
-  
+
   async function register(dto: RegisterDTO): Promise<UserDTO> {
-    const response = await registerApi(dto)
-    return response.data
+    error.value = ''
+    const result = await authApi.register(dto)
+    if (result.code !== 0 || !result.data) {
+      error.value = result.message || '注册失败'
+      throw new Error(error.value)
+    }
+    return result.data
   }
-  
+
   async function fetchCurrentUser(): Promise<void> {
     if (!token.value) return
+    error.value = ''
     try {
-      const response = await getCurrentUser()
-      user.value = response.data
+      const result = await authApi.getCurrentUser()
+      if (result.code === 0 && result.data) {
+        user.value = result.data
+        localStorage.setItem('user', JSON.stringify(result.data))
+      }
     } catch {
-      logout()
+      // token 可能过期，静默失败
     }
   }
-  
-  function logout(): void {
+
+  async function logout(): Promise<void> {
+    try {
+      if (refreshToken.value) {
+        await authApi.logout(refreshToken.value)
+      }
+    } catch {
+      // 即使服务端退出失败也清理本地状态
+    }
     token.value = null
+    refreshToken.value = null
     user.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
+    localStorage.removeItem('user')
   }
-  
+
   return {
     token,
     user,
     isLoggedIn,
+    error,
     login,
     register,
     fetchCurrentUser,

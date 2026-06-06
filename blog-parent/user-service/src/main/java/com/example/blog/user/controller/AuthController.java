@@ -4,7 +4,9 @@ import com.example.blog.common.Result;
 import com.example.blog.common.dto.*;
 import com.example.blog.common.exception.BusinessException;
 import com.example.blog.user.service.GuestAuthService;
+import com.example.blog.user.service.JwtService;
 import com.example.blog.user.service.UserService;
+import io.jsonwebtoken.Claims;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ public class AuthController {
 
     private final UserService userService;
     private final GuestAuthService guestAuthService;
+    private final JwtService jwtService;
 
     @PostMapping("/register")
     public Result<UserDTO> register(@Valid @RequestBody RegisterDTO dto) {
@@ -54,7 +57,19 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public Result<UserDTO> getCurrentUser(@RequestHeader("X-User-Id") String userId) {
-        return Result.success(userService.getCurrentUser(UUID.fromString(userId)));
+    public Result<UserDTO> getCurrentUser(@RequestHeader("Authorization") String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            throw BusinessException.unauthorized("未登录");
+        }
+        
+        String token = authorization.substring(7);
+        Claims claims = jwtService.parseToken(token);
+        
+        if (claims == null) {
+            throw BusinessException.unauthorized("无效的token");
+        }
+        
+        UUID userId = jwtService.getUserId(claims);
+        return Result.success(userService.getCurrentUser(userId));
     }
 }

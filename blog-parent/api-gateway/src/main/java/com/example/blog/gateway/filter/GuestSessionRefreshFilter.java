@@ -12,11 +12,15 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 @Component
-@Order(3)
 @RequiredArgsConstructor
-public class GuestSessionRefreshFilter implements GlobalFilter {
+public class GuestSessionRefreshFilter implements GlobalFilter, Ordered {
 
     private final ReactiveRedisTemplate<String, String> redisTemplate;
+
+    @Override
+    public int getOrder() {
+        return 3;
+    }
 
     private static final String GUEST_SESSION_PREFIX = "guest:session:";
     private static final Duration GUEST_SESSION_TTL = Duration.ofHours(24);

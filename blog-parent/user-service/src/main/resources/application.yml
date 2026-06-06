@@ -7,14 +7,12 @@ spring:
   cloud:
     nacos:
       discovery:
+        enabled: true
         server-addr: localhost:8848
-        namespace: dev
-        group: blog-group
       config:
-        server-addr: localhost:8848
-        namespace: dev
-        group: blog-group
-        file-extension: yaml
+        enabled: false
+        import-check:
+          enabled: false
   datasource:
     url: jdbc:postgresql://localhost:5432/user_db
     username: postgres

@@ -17,11 +17,15 @@ import java.util.Set;
 
 @Slf4j
 @Component
-@Order(2)
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter implements GlobalFilter {
+public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final JwtService jwtService;
+
+    @Override
+    public int getOrder() {
+        return 2;
+    }
 
     private static final Set<String> WHITE_LIST = Set.of(
             "/api/v1/auth/login",
@@ -70,6 +74,7 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         ServerHttpRequest modifiedRequest = request.mutate()
                 .header("X-User-Id", userId)
                 .header("X-User-Role", role)
+                .header("X-User-Name", userId)
                 .build();
 
         return chain.filter(exchange.mutate().request(modifiedRequest).build());

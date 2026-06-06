@@ -12,8 +12,12 @@ import java.util.UUID;
 
 @Slf4j
 @Component
-@Order(1)
-public class RequestLoggingFilter implements GlobalFilter {
+public class RequestLoggingFilter implements GlobalFilter, Ordered {
+
+    @Override
+    public int getOrder() {
+        return 1;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {

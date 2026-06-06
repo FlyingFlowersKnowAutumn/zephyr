@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import type { LoginDTO, RegisterDTO } from '@/types'
+import Header from '@/components/layout/Header.vue'
 
 const router = useRouter()
 const { login, register } = useAuth()
@@ -48,6 +49,7 @@ function goBack() {
 
 <template>
   <div class="form-container">
+    <Header />
     <div class="form-card">
       <button class="back-btn" @click="goBack">
         ← 返回
@@ -71,7 +73,15 @@ function goBack() {
         <div class="form-group">
           <label>{{ isLogin ? '用户名' : '用户名（3-50字符）' }}</label>
           <input 
-            v-model="isLogin ? loginForm.username : registerForm.username"
+            v-if="isLogin"
+            v-model="loginForm.username"
+            type="text" 
+            placeholder="请输入用户名"
+            required
+          />
+          <input 
+            v-else
+            v-model="registerForm.username"
             type="text" 
             placeholder="请输入用户名"
             required
@@ -81,7 +91,15 @@ function goBack() {
         <div class="form-group">
           <label>{{ isLogin ? '密码' : '密码（至少8位）' }}</label>
           <input 
-            v-model="isLogin ? loginForm.password : registerForm.password"
+            v-if="isLogin"
+            v-model="loginForm.password"
+            type="password" 
+            placeholder="请输入密码"
+            required
+          />
+          <input 
+            v-else
+            v-model="registerForm.password"
             type="password" 
             placeholder="请输入密码"
             required
