@@ -89,14 +89,17 @@ onMounted(async () => {
 .write-btn {
   display: inline-block;
   padding: 0.75rem 2rem;
-  background: var(--color-accent);
+  background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
   color: white;
-  border-radius: var(--border-radius);
-  font-size: 0.95rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s;
 
   &:hover {
     text-decoration: none;
-    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
   }
 }
 

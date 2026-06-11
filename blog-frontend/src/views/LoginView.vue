@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeMount, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { RouterLink } from 'vue-router'
+
 import gsap from 'gsap'
 import Header from '@/components/layout/Header.vue'
 

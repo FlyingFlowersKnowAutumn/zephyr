@@ -47,3 +47,13 @@ export async function listTags(): Promise<Result<string[]>> {
   const response = await axios.get('/v1/tags')
   return response.data
 }
+
+export async function createCategory(name: string): Promise<Result<string>> {
+  const response = await axios.post('/v1/categories', { name })
+  return response.data
+}
+
+export async function createTag(name: string): Promise<Result<string>> {
+  const response = await axios.post('/v1/tags', { name })
+  return response.data
+}

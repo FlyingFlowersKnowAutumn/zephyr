@@ -10,6 +10,7 @@ interface Props {
   heroTitle?: string
   heroSubtitle?: string
   heroImage?: string
+  heroSize?: 'full' | 'small'
 }
 
 withDefaults(defineProps<Props>(), {
@@ -17,7 +18,8 @@ withDefaults(defineProps<Props>(), {
   showHero: true,
   heroTitle: '我的博客',
   heroSubtitle: '记录技术与生活',
-  heroImage: '/blog.png'
+  heroImage: '/blog.png',
+  heroSize: 'full'
 })
 
 const emit = defineEmits(['open-search'])
@@ -130,18 +132,17 @@ function scrollDown() {
   <div class="layout-wrapper">
     <Header @open-search="emit('open-search')" />
     
-    <div v-if="showHero" class="hero-section">
+    <div v-if="showHero" class="hero-section" :class="{ 'hero-small': heroSize === 'small' }">
       <div class="hero-bg" :style="{ backgroundImage: `url(${heroImage})` }"></div>
       
-      <!-- 流星容器 -->
       <div class="meteors-container">
         <div v-for="i in 40" :key="i" class="meteor"></div>
       </div>
       
       <div class="hero-content">
         <h1 class="hero-title">{{ heroTitle }}</h1>
-        <p v-if="heroSubtitle" class="hero-subtitle">{{ currentSubtitle }}<span class="cursor"></span></p>
-        <div class="scroll-indicator" @click="scrollDown">
+        <p v-if="heroSubtitle && heroSize === 'full'" class="hero-subtitle">{{ currentSubtitle }}<span class="cursor"></span></p>
+        <div v-if="heroSize === 'full'" class="scroll-indicator" @click="scrollDown">
           <div class="scroll-arrow"></div>
         </div>
       </div>
@@ -175,6 +176,11 @@ function scrollDown() {
   position: relative;
   height: 100vh;
   overflow: hidden;
+
+  &.hero-small {
+    height: 33.33vh;
+    min-height: 250px;
+  }
 }
 
 .hero-bg {
@@ -189,6 +195,24 @@ function scrollDown() {
   z-index: -1;
   width: 100vw;
   height: 100vh;
+}
+
+.hero-small {
+  .hero-bg {
+    position: absolute;
+    background-position: top center;
+    width: 100%;
+    height: 100%;
+  }
+
+  .hero-content {
+    height: 100%;
+  }
+
+  .hero-title {
+    font-size: 2.5rem;
+    margin-bottom: 0;
+  }
 }
 
 .meteors-container {

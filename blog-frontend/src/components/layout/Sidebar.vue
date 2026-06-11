@@ -131,10 +131,10 @@ function formatDate(dateString?: string) {
       <h3 class="card-title">分类</h3>
       <ul v-if="categories.length" class="category-list">
         <li>
-          <RouterLink to="/articles">全部</RouterLink>
+          <RouterLink to="/categories">查看全部分类</RouterLink>
         </li>
         <li v-for="cat in categories" :key="cat">
-          <RouterLink :to="{ path: '/articles', query: { category: cat } }">{{ cat }}</RouterLink>
+          <RouterLink :to="{ path: '/categories', query: { category: cat } }">{{ cat }}</RouterLink>
         </li>
       </ul>
       <div v-else class="empty-text">暂无</div>
@@ -143,10 +143,13 @@ function formatDate(dateString?: string) {
     <div class="sidebar-card">
       <h3 class="card-title">标签</h3>
       <div v-if="tags.length" class="tag-cloud">
+        <RouterLink to="/tags" class="tag view-all">
+          查看全部标签
+        </RouterLink>
         <RouterLink 
-          v-for="tag in tags.slice(0, 10)" 
+          v-for="tag in tags.slice(0, 9)" 
           :key="tag"
-          :to="{ path: '/search', query: { q: tag } }"
+          :to="{ path: '/tags', query: { tag: tag } }"
           class="tag"
         >
           {{ tag }}
@@ -157,12 +160,11 @@ function formatDate(dateString?: string) {
 
     <div class="sidebar-card">
       <h3 class="card-title">归档</h3>
-      <ul v-if="latestArticles.length" class="archive-list">
-        <li v-for="article in latestArticles" :key="article.id">
-          <RouterLink :to="`/articles/${article.slug || article.id}`">{{ formatDate(article.publishedAt || article.createdAt) }}</RouterLink>
+      <ul class="archive-list">
+        <li>
+          <RouterLink to="/archive">按时间浏览文章</RouterLink>
         </li>
       </ul>
-      <div v-else class="empty-text">暂无</div>
     </div>
 
     <div class="sidebar-card site-info-card">

@@ -147,6 +147,34 @@ export const useArticleStore = defineStore('article', () => {
     return tags.value
   }
 
+  async function createCategory(name: string): Promise<boolean> {
+    try {
+      const result = await articleApi.createCategory(name)
+      if (result.code === 0) {
+        return true
+      }
+      error.value = result.message || '创建分类失败'
+      return false
+    } catch {
+      error.value = '创建分类失败'
+      return false
+    }
+  }
+
+  async function createTag(name: string): Promise<boolean> {
+    try {
+      const result = await articleApi.createTag(name)
+      if (result.code === 0) {
+        return true
+      }
+      error.value = result.message || '创建标签失败'
+      return false
+    } catch {
+      error.value = '创建标签失败'
+      return false
+    }
+  }
+
   function clearError() {
     error.value = ''
   }
@@ -165,6 +193,8 @@ export const useArticleStore = defineStore('article', () => {
     removeArticle,
     fetchCategories,
     fetchTags,
+    createCategory,
+    createTag,
     clearError
   }
 })

@@ -84,6 +84,21 @@ const router = createRouter({
       path: '/guestbook',
       name: 'Guestbook',
       component: () => import('@/views/GuestbookView.vue')
+    },
+    {
+      path: '/archive',
+      name: 'Archive',
+      component: () => import('@/views/ArchiveView.vue')
+    },
+    {
+      path: '/categories',
+      name: 'Categories',
+      component: () => import('@/views/CategoryView.vue')
+    },
+    {
+      path: '/tags',
+      name: 'Tags',
+      component: () => import('@/views/TagView.vue')
     }
   ]
 })
