@@ -12,23 +12,23 @@ const selectedYear = ref('')
 
 const groupedArticles = computed(() => {
   const groups: Record<string, any[]> = {}
-  
+
   articles.value.forEach(article => {
     const date = new Date(article.publishedAt || article.createdAt)
     const year = `${date.getFullYear()}`
-    
+
     if (!groups[year]) {
       groups[year] = []
     }
     groups[year].push(article)
   })
-  
+
   return Object.entries(groups)
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([key, value]) => ({
       year: key,
-      articles: value.sort((a, b) => 
-        new Date(b.publishedAt || b.createdAt).getTime() - 
+      articles: value.sort((a, b) =>
+        new Date(b.publishedAt || b.createdAt).getTime() -
         new Date(a.publishedAt || a.createdAt).getTime()
       )
     }))
@@ -36,7 +36,7 @@ const groupedArticles = computed(() => {
 
 const filteredArticles = computed(() => {
   if (!selectedYear.value) return groupedArticles.value
-  return groupedArticles.value.filter(g => g.year === selectedYear.value)
+  return groupedArticles.value.filter(g => g.year === selectedYear.value)       
 })
 
 function formatDate(dateString?: string) {
@@ -61,9 +61,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LayoutWrapper heroTitle="归档" :showSidebar="true" heroSize="small">
+  <LayoutWrapper heroTitle="归档" :showSidebar="true" heroSize="small">       
     <SeoHead />
-    
+
     <section class="archive-content">
       <div v-if="loading" class="loading">
         <div class="loading-spinner"></div>
@@ -76,7 +76,7 @@ onMounted(async () => {
 
       <div v-else class="archive-container">
         <div class="year-sidebar">
-          <div 
+          <div
             @click="selectYear('')"
             class="year-item"
             :class="{ active: !selectedYear }"
@@ -85,8 +85,8 @@ onMounted(async () => {
             <span class="year-label">全部文章</span>
             <span class="year-count">{{ articles.length }}</span>
           </div>
-          <div 
-            v-for="group in groupedArticles" 
+          <div
+            v-for="group in groupedArticles"
             :key="group.year"
             @click="selectYear(group.year)"
             class="year-item"
@@ -97,7 +97,7 @@ onMounted(async () => {
             <span class="year-count">{{ group.articles.length }}</span>
           </div>
         </div>
-        
+
         <div class="articles-main">
           <div v-for="group in filteredArticles" :key="group.year" class="year-section">
             <div class="year-header">
@@ -105,14 +105,14 @@ onMounted(async () => {
               <span class="year-article-count">{{ group.articles.length }} 篇文章</span>
             </div>
             <div class="articles-list">
-              <article 
-                v-for="article in group.articles" 
-                :key="article.id" 
+              <article
+                v-for="article in group.articles"
+                :key="article.id"
                 class="archive-article"
               >
                 <RouterLink :to="`/articles/${article.slug || article.id}`" class="article-link">
                   <div class="article-cover" v-if="article.coverImage">
-                    <img :src="article.coverImage" :alt="article.title" />
+                    <img :src="article.coverImage" :alt="article.title" />      
                   </div>
                   <div class="article-cover placeholder" v-else>
                     <svg width="100%" height="100%" viewBox="0 0 200 120" fill="none">
@@ -239,7 +239,7 @@ onMounted(async () => {
 
   &.active {
     color: var(--color-accent);
-    
+
     .year-dot {
       background: var(--color-accent);
       box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
@@ -266,7 +266,7 @@ onMounted(async () => {
   flex: 1;
   font-size: 0.9rem;
   color: var(--color-text-secondary);
-  
+
   .year-item:hover &,
   .year-item.active & {
     color: inherit;
@@ -277,7 +277,7 @@ onMounted(async () => {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   font-weight: 500;
-  
+
   .year-item:hover &,
   .year-item.active & {
     color: inherit;

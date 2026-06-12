@@ -10,6 +10,11 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue')
     },
     {
+      path: '/register',
+      name: 'Register',
+      component: () => import('@/views/RegisterView.vue')
+    },
+    {
       path: '/login-form',
       name: 'LoginForm',
       component: () => import('@/views/LoginFormView.vue')
@@ -22,8 +27,7 @@ const router = createRouter({
     {
       path: '/write',
       name: 'Write',
-      component: () => import('@/views/WriteView.vue'),
-      meta: { requiresAuth: true }
+      component: () => import('@/views/WriteView.vue')
     },
     {
       path: '/articles',

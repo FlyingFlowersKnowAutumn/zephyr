@@ -53,7 +53,7 @@ function handleSearch() {
     <div class="header-inner">
       <div class="left-section">
         <div class="logo">
-          <RouterLink to="/">Linzy 知识库</RouterLink>
+          <RouterLink to="/">Zéphyr・Journal</RouterLink>
         </div>
       </div>
       
@@ -254,7 +254,7 @@ function handleSearch() {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(80, 80, 143, 0.801);
   color: white;
   font-size: 0.85rem;
   font-weight: 600;
@@ -265,8 +265,8 @@ function handleSearch() {
   justify-content: center;
   text-decoration: none;
   transition: all 0.3s ease;
-  box-shadow: none;
-  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
   
   &:hover {
     transform: scale(1.08);

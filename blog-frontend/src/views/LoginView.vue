@@ -9,8 +9,24 @@ import Header from '@/components/layout/Header.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 const animationPlayed = ref(false)
+
+const isLoginMode = ref(true)
+const isPasswordlessMode = ref(false)
+const showResetModal = ref(false)
+
 const username = ref('')
 const password = ref('')
+const email = ref('')
+const captcha = ref('')
+const resetEmail = ref('')
+const resetCaptcha = ref('')
+const resetNewPassword = ref('')
+const resetConfirmPassword = ref('')
+
+const captchaBtnText = ref('验证码')
+const resetCaptchaBtnText = ref('验证码')
+const isCaptchaDisabled = ref(false)
+const isResetCaptchaDisabled = ref(false)
 const isLoading = ref(false)
 
 onBeforeMount(() => {
@@ -30,6 +46,102 @@ async function handleLogin() {
   } finally {
     isLoading.value = false
   }
+}
+
+async function handlePasswordlessLogin() {
+  if (!email.value.trim() || !captcha.value.trim()) {
+    return
+  }
+  isLoading.value = true
+  try {
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    router.push('/')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleRegister() {
+  if (!username.value.trim() || !password.value.trim() || !email.value.trim() || !captcha.value.trim()) {
+    return
+  }
+  
+  isLoading.value = true
+  try {
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleResetPassword() {
+  if (!resetEmail.value.trim() || !resetCaptcha.value.trim() || !resetNewPassword.value.trim() || !resetConfirmPassword.value.trim()) {
+    return
+  }
+  
+  if (resetNewPassword.value !== resetConfirmPassword.value) {
+    return
+  }
+  
+  isLoading.value = true
+  try {
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    showResetModal.value = false
+    resetEmail.value = ''
+    resetCaptcha.value = ''
+    resetNewPassword.value = ''
+    resetConfirmPassword.value = ''
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function getCaptcha() {
+  const targetEmail = isPasswordlessMode.value ? email.value : (isLoginMode.value ? email.value : email.value)
+  if (!targetEmail.trim()) return
+  
+  isCaptchaDisabled.value = true
+  captchaBtnText.value = '60s'
+  
+  let count = 60
+  const timer = setInterval(() => {
+    count--
+    captchaBtnText.value = `${count}s`
+    
+    if (count <= 0) {
+      clearInterval(timer)
+      isCaptchaDisabled.value = false
+      captchaBtnText.value = '验证码'
+    }
+  }, 1000)
+}
+
+async function getResetCaptcha() {
+  if (!resetEmail.value.trim()) return
+  
+  isResetCaptchaDisabled.value = true
+  resetCaptchaBtnText.value = '60s'
+  
+  let count = 60
+  const timer = setInterval(() => {
+    count--
+    resetCaptchaBtnText.value = `${count}s`
+    
+    if (count <= 0) {
+      clearInterval(timer)
+      isResetCaptchaDisabled.value = false
+      resetCaptchaBtnText.value = '验证码'
+    }
+  }, 1000)
+}
+
+function toggleMode() {
+  isLoginMode.value = !isLoginMode.value
+  isPasswordlessMode.value = false
+}
+
+function togglePasswordlessMode() {
+  isPasswordlessMode.value = !isPasswordlessMode.value
 }
 
 function initMeteors() {
@@ -105,34 +217,50 @@ onUnmounted(() => {
       
       <div class="right-section">
         <div class="login-card">
-          <h2 class="login-title">登录</h2>
+          <h2 class="login-title">{{ isLoginMode ? (isPasswordlessMode ? '登录' : '登录') : '注册' }}</h2>
           
-          <div class="links-row">
-            <a href="#" class="link">没有账号？立即注册 &gt;</a>
+          <div v-if="isLoginMode && !isPasswordlessMode" class="links-row">
+            <a href="#" class="link" @click.prevent="toggleMode">
+              没有账号？立即注册 &gt;
+            </a>
           </div>
           
-          <form class="login-form" @submit.prevent="handleLogin">
+          <div v-else-if="isLoginMode && isPasswordlessMode" class="links-row">
+            <a href="#" class="link" @click.prevent="toggleMode">
+              没有账号？立即注册 &gt;
+            </a>
+          </div>
+          
+          <div v-else class="links-row">
+            <a href="#" class="link" @click.prevent="toggleMode">
+              已有账号？立即登录 &gt;
+            </a>
+          </div>
+          
+          <form v-if="isLoginMode && !isPasswordlessMode" class="login-form" @submit.prevent="handleLogin">
             <div class="form-group">
+              <label class="form-label">邮箱</label>
               <input
                 v-model="username"
-                type="text"
-                placeholder="用户名/邮箱"
+                type="email"
+                placeholder="邮箱"
                 class="form-input"
               />
             </div>
             
             <div class="form-group">
+              <label class="form-label">密码</label>
               <input
                 v-model="password"
                 type="password"
-                placeholder="登录密码"
+                placeholder="密码"
                 class="form-input"
               />
             </div>
             
             <div class="form-links">
-              <a href="#" class="form-link">修改密码</a>
-              <a href="#" class="form-link">免密登录</a>
+              <a href="#" class="form-link" @click.prevent="showResetModal = true">修改密码</a>
+              <a href="#" class="form-link" @click.prevent="togglePasswordlessMode">免密登录</a>
             </div>
             
             <button type="submit" class="login-btn" :disabled="isLoading">
@@ -142,7 +270,158 @@ onUnmounted(() => {
               <span>{{ isLoading ? '登录中...' : '登录' }}</span>
             </button>
           </form>
+          
+          <form v-else-if="isLoginMode && isPasswordlessMode" class="login-form" @submit.prevent="handlePasswordlessLogin">
+            <div class="form-group">
+              <label class="form-label">邮箱</label>
+              <input
+                v-model="email"
+                type="email"
+                placeholder="邮箱"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group captcha-group">
+              <div class="captcha-input-wrapper">
+                <label class="form-label">验证码</label>
+                <input
+                  v-model="captcha"
+                  type="text"
+                  placeholder="验证码"
+                  class="form-input"
+                />
+              </div>
+              <button type="button" class="captcha-btn" :disabled="isCaptchaDisabled" @click="getCaptcha">
+                {{ captchaBtnText }}
+              </button>
+            </div>
+            
+            <div class="form-links">
+              <a href="#" class="form-link" @click.prevent="togglePasswordlessMode">账号密码登录</a>
+            </div>
+            
+            <button type="submit" class="login-btn" :disabled="isLoading">
+              <svg v-if="isLoading" class="loading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <circle class="spin" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span>{{ isLoading ? '登录中...' : '登录' }}</span>
+            </button>
+          </form>
+          
+          <form v-else class="login-form" @submit.prevent="handleRegister">
+            <div class="form-group">
+              <label class="form-label">用户名</label>
+              <input
+                v-model="username"
+                type="text"
+                placeholder="用户名"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">密码</label>
+              <input
+                v-model="password"
+                type="password"
+                placeholder="密码"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">邮箱</label>
+              <input
+                v-model="email"
+                type="email"
+                placeholder="邮箱"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group captcha-group">
+              <div class="captcha-input-wrapper">
+                <label class="form-label">验证码</label>
+                <input
+                  v-model="captcha"
+                  type="text"
+                  placeholder="验证码"
+                  class="form-input"
+                />
+              </div>
+              <button type="button" class="captcha-btn" :disabled="isCaptchaDisabled" @click="getCaptcha">
+                {{ captchaBtnText }}
+              </button>
+            </div>
+            
+            <button type="submit" class="login-btn register-btn" :disabled="isLoading">
+              <svg v-if="isLoading" class="loading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <circle class="spin" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span>{{ isLoading ? '注册中...' : '注册' }}</span>
+            </button>
+          </form>
         </div>
+      </div>
+    </div>
+    
+    <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
+      <div class="modal-content">
+        <button class="modal-close" @click="showResetModal = false">&times;</button>
+        <h3 class="modal-title">修改密码</h3>
+        
+        <form class="reset-form" @submit.prevent="handleResetPassword">
+          <div class="form-group">
+            <label class="form-label">邮箱:</label>
+            <input
+              v-model="resetEmail"
+              type="email"
+              placeholder="邮箱"
+              class="form-input"
+            />
+          </div>
+          
+          <div class="form-group captcha-group">
+            <div class="captcha-input-wrapper">
+              <label class="form-label">验证码:</label>
+              <input
+                v-model="resetCaptcha"
+                type="text"
+                placeholder="验证码"
+                class="form-input"
+              />
+            </div>
+            <button type="button" class="captcha-btn" :disabled="isResetCaptchaDisabled" @click="getResetCaptcha">
+              {{ resetCaptchaBtnText }}
+            </button>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">新密码:</label>
+            <input
+              v-model="resetNewPassword"
+              type="password"
+              placeholder="新密码"
+              class="form-input"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">新密码:</label>
+            <input
+              v-model="resetConfirmPassword"
+              type="password"
+              placeholder="确认新密码"
+              class="form-input"
+            />
+          </div>
+          
+          <div class="modal-actions">
+            <button type="button" class="modal-btn modal-btn-cancel" @click="showResetModal = false">验证码</button>
+            <button type="submit" class="modal-btn modal-btn-submit" :disabled="isLoading">提交</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -219,19 +498,20 @@ onUnmounted(() => {
 }
 
 .login-card {
-  width: 430px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 248, 240, 0.5) 100%);
+  width: 380px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 248, 240, 0.7) 100%);
   backdrop-filter: blur(20px);
-  border-radius: 24px;
-  padding: 2rem;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
 }
 
 .login-title {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
   position: relative;
   display: inline-block;
   padding-bottom: 4px;
@@ -240,147 +520,150 @@ onUnmounted(() => {
     content: '';
     position: absolute;
     bottom: 0;
-    left: 0;
-    width: 66%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
     height: 3px;
-    background: linear-gradient(90deg, var(--color-accent), #ff8fab);
-    transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-  }
-  
-  &:hover::after {
-    width: 100%;
+    background: linear-gradient(90deg, #00d4ff, #a855f7);
+    border-radius: 2px;
   }
 }
 
 .links-row {
-  margin-bottom: 0.5rem;
+  text-align: center;
+  margin-bottom: 1rem;
   
   .link {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #666;
     text-decoration: none;
     
     &:hover {
-      color: var(--color-accent);
+      color: #00d4ff;
     }
   }
 }
 
 .login-form {
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 0.875rem;
   position: relative;
+}
+
+.form-label {
+  font-size: 0.7rem;
+  color: #666;
+  margin-bottom: 0.375rem;
+  display: block;
 }
 
 .form-input {
   width: 100%;
-  padding: 0.875rem 1rem;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 0.8rem;
   color: #333;
   outline: none;
-  position: relative;
-  z-index: 1;
+  transition: all 0.2s;
   
   &::placeholder {
     color: #999;
   }
+  
+  &:focus {
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+  }
 }
 
-.form-group::before {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: #e0e0e0;
-  z-index: 0;
+.captcha-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  
+  .captcha-input-wrapper {
+    flex: 1;
+  }
 }
 
-.form-group::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--color-accent), #ff8fab);
-  transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-  z-index: 1;
-}
-
-.form-group:hover::after {
-  width: 100%;
-}
-
-.form-group:focus-within::after {
-  width: 100%;
+.captcha-btn {
+  padding: 0.375rem 0.875rem;
+  background: linear-gradient(135deg, #87ceeb 0%, #6ba3e0 100%);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: fit-content;
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #7bc7e8 0%, #5b98d4 100%);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .form-links {
   display: flex;
   justify-content: flex-end;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
   
   .form-link {
-    font-size: 0.875rem;
+    font-size: 0.7rem;
     color: #666;
     text-decoration: none;
-    transition: color 0.3s;
+    transition: color 0.2s;
     
     &:hover {
-      color: var(--color-accent);
-    }
-  }
-}
-
-.links-row {
-  margin-bottom: 0.5rem;
-  
-  .link {
-    font-size: 0.875rem;
-    color: #666;
-    text-decoration: none;
-    transition: color 0.3s;
-    
-    &:hover {
-      color: var(--color-accent);
+      color: #00d4ff;
     }
   }
 }
 
 .login-btn {
-  width: 200px;
+  width: 100%;
   margin: 0 auto;
-  padding: 0.6rem;
+  padding: 0.5rem;
   background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
   color: white;
   border: none;
-  border-radius: 30px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(0, 212, 255, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 212, 255, 0.3);
   }
   
   &:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+  }
+}
+
+.register-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  
+  &:hover:not(:disabled) {
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
   }
 }
 
@@ -393,6 +676,114 @@ onUnmounted(() => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  width: 350px;
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    color: #333;
+  }
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.reset-form {
+  .form-group {
+    margin-bottom: 0.75rem;
+  }
+  
+  .form-label {
+    font-size: 0.65rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+  }
+  
+  .form-input {
+    padding: 0.4375rem 0.625rem;
+    font-size: 0.75rem;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 0.4375rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-btn-cancel {
+  background: #333;
+  color: white;
+  
+  &:hover {
+    background: #444;
+  }
+}
+
+.modal-btn-submit {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  
+  &:hover:not(:disabled) {
+    box-shadow: 0 4px 15px rgba(155, 89, 182, 0.3);
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
   }
 }
 
@@ -416,15 +807,13 @@ onUnmounted(() => {
 
 @media (max-width: 500px) {
   .login-card {
-    padding: 1.5rem;
+    width: 100%;
+    padding: 1.25rem;
   }
   
-  .nav {
-    gap: 1rem;
-  }
-  
-  .header-inner {
-    padding: 0.75rem 1rem;
+  .modal-content {
+    width: 90%;
+    padding: 1.25rem;
   }
 }
 </style>

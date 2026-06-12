@@ -20,7 +20,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LayoutWrapper heroTitle="我的博客" heroSubtitle="记录技术与生活" :showSidebar="true" @open-search="emit('open-search')">
+  <LayoutWrapper heroTitle="微风日志" heroSubtitle="La brise écrit mes pensées" :showSidebar="true" @open-search="emit('open-search')">
     <SeoHead />
 
     <section class="home-content">

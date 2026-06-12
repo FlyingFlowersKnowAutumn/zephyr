@@ -16,8 +16,8 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   showSidebar: true,
   showHero: true,
-  heroTitle: '我的博客',
-  heroSubtitle: '记录技术与生活',
+  heroTitle: '微风日志',
+  heroSubtitle: '微风书写我的心事',
   heroImage: '/blog.png',
   heroSize: 'full'
 })
@@ -25,11 +25,11 @@ withDefaults(defineProps<Props>(), {
 const emit = defineEmits(['open-search'])
 
 const currentSubtitle = ref('')
-const chineseText = '记录技术与生活'
-const englishText = 'Record life & technology'
+const chineseText = '微风书写我的心事'
+const frenchText = 'La brise écrit mes pensées'
 let typingInterval: number | null = null
 
-const texts = [chineseText, englishText]
+const texts = [chineseText, frenchText]
 let currentTextIndexRef = 0
 
 function startTyping() {
@@ -72,10 +72,10 @@ function initMeteors() {
   const meteors = document.querySelectorAll('.meteor')
   meteors.forEach((m, index) => {
     gsap.killTweensOf(m)
-    
+
     const startFromTop = Math.random() > 0.5
     let startX, startY, endX, endY
-    
+
     if (startFromTop) {
       startX = Math.random() * (window.innerWidth + 200) - 100
       startY = -200
@@ -89,7 +89,7 @@ function initMeteors() {
       endX = startX - distance
       endY = startY + distance
     }
-    
+
     gsap.set(m, {
       x: startX,
       y: startY,
@@ -111,7 +111,7 @@ function initMeteors() {
 onMounted(() => {
   startTyping()
   initMeteors()
-  
+
   window.addEventListener('resize', initMeteors)
 })
 
@@ -131,14 +131,14 @@ function scrollDown() {
 <template>
   <div class="layout-wrapper">
     <Header @open-search="emit('open-search')" />
-    
+
     <div v-if="showHero" class="hero-section" :class="{ 'hero-small': heroSize === 'small' }">
       <div class="hero-bg" :style="{ backgroundImage: `url(${heroImage})` }"></div>
-      
+
       <div class="meteors-container">
         <div v-for="i in 40" :key="i" class="meteor"></div>
       </div>
-      
+
       <div class="hero-content">
         <h1 class="hero-title">{{ heroTitle }}</h1>
         <p v-if="heroSubtitle && heroSize === 'full'" class="hero-subtitle">{{ currentSubtitle }}<span class="cursor"></span></p>
@@ -159,7 +159,7 @@ function scrollDown() {
 
     <footer class="footer">
       <div class="footer-inner">
-        <p>&copy; {{ new Date().getFullYear() }} 我的博客. All rights reserved.</p>
+        <p>&copy; {{ new Date().getFullYear() }} 微风日志. All rights reserved.</p>
       </div>
     </footer>
   </div>
