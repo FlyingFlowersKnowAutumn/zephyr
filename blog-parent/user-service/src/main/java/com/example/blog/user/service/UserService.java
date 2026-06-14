@@ -3,6 +3,7 @@ package com.example.blog.user.service;
 import com.example.blog.common.dto.LoginDTO;
 import com.example.blog.common.dto.LoginResponseDTO;
 import com.example.blog.common.dto.RegisterDTO;
+import com.example.blog.common.dto.UpdatePasswordDTO;
 import com.example.blog.common.dto.UserDTO;
 import com.example.blog.common.enums.RoleEnum;
 import com.example.blog.common.exception.BusinessException;
@@ -98,6 +99,25 @@ public class UserService {
     public void logout(String refreshToken) {
         redisTemplate.delete(REFRESH_TOKEN_PREFIX + refreshToken);
         log.info("User logged out, refresh token revoked");
+    }
+
+    @Transactional
+    public void updatePassword(UUID userId, UpdatePasswordDTO dto) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> BusinessException.notFound("用户不存在"));
+
+        if (!passwordEncoder.matches(dto.getOldPassword(), user.getPasswordHash())) {
+            throw BusinessException.unauthorized("旧密码错误");
+        }
+
+        if (dto.getOldPassword().equals(dto.getNewPassword())) {
+            throw BusinessException.badRequest("新密码不能与旧密码相同");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(dto.getNewPassword()));
+        userRepository.save(user);
+        
+        log.info("User password updated: id={}", userId);
     }
 
     private UserDTO convertToDTO(User user) {

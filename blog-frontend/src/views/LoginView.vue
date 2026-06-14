@@ -21,7 +21,6 @@ const captcha = ref('')
 const resetEmail = ref('')
 const resetCaptcha = ref('')
 const resetNewPassword = ref('')
-const resetConfirmPassword = ref('')
 
 const captchaBtnText = ref('验证码')
 const resetCaptchaBtnText = ref('验证码')
@@ -75,11 +74,7 @@ async function handleRegister() {
 }
 
 async function handleResetPassword() {
-  if (!resetEmail.value.trim() || !resetCaptcha.value.trim() || !resetNewPassword.value.trim() || !resetConfirmPassword.value.trim()) {
-    return
-  }
-  
-  if (resetNewPassword.value !== resetConfirmPassword.value) {
+  if (!resetEmail.value.trim() || !resetCaptcha.value.trim() || !resetNewPassword.value.trim()) {
     return
   }
   
@@ -90,7 +85,6 @@ async function handleResetPassword() {
     resetEmail.value = ''
     resetCaptcha.value = ''
     resetNewPassword.value = ''
-    resetConfirmPassword.value = ''
   } finally {
     isLoading.value = false
   }
@@ -407,19 +401,8 @@ onUnmounted(() => {
             />
           </div>
           
-          <div class="form-group">
-            <label class="form-label">新密码:</label>
-            <input
-              v-model="resetConfirmPassword"
-              type="password"
-              placeholder="确认新密码"
-              class="form-input"
-            />
-          </div>
-          
           <div class="modal-actions">
-            <button type="button" class="modal-btn modal-btn-cancel" @click="showResetModal = false">验证码</button>
-            <button type="submit" class="modal-btn modal-btn-submit" :disabled="isLoading">提交</button>
+            <button type="submit" class="modal-btn modal-btn-submit full-width" :disabled="isLoading">提交</button>
           </div>
         </form>
       </div>
@@ -784,6 +767,11 @@ onUnmounted(() => {
   &:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+  }
+  
+  &.full-width {
+    flex: none;
+    width: 100%;
   }
 }
 

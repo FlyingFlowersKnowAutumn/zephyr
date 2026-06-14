@@ -2,6 +2,7 @@ package com.example.blog.user.controller;
 
 import com.example.blog.common.Result;
 import com.example.blog.common.dto.*;
+import jakarta.validation.Valid;
 import com.example.blog.common.exception.BusinessException;
 import com.example.blog.user.service.GuestAuthService;
 import com.example.blog.user.service.JwtService;
@@ -53,6 +54,27 @@ public class AuthController {
     @PostMapping("/logout")
     public Result<Void> logout(@RequestBody LogoutDTO dto) {
         userService.logout(dto.getRefreshToken());
+        return Result.success(null);
+    }
+
+    @PutMapping("/password")
+    public Result<Void> updatePassword(
+            @RequestHeader("Authorization") String authorization,
+            @Valid @RequestBody UpdatePasswordDTO dto) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            throw BusinessException.unauthorized("未登录");
+        }
+        
+        String token = authorization.substring(7);
+        Claims claims = jwtService.parseToken(token);
+        
+        if (claims == null) {
+            throw BusinessException.unauthorized("无效的token");
+        }
+        
+        UUID userId = jwtService.getUserId(claims);
+        userService.updatePassword(userId, dto);
+        
         return Result.success(null);
     }
 

@@ -41,7 +41,7 @@ interface Result<T> {
 **请求体**:
 ```json
 {
-  "username": "string",  // 用户名
+  "username": "string",  // 用户名或邮箱
   "password": "string"   // 密码
 }
 ```
@@ -60,8 +60,10 @@ interface Result<T> {
       "displayName": "string",
       "email": "string",
       "avatarUrl": "string",
-      "role": "string",
-      "isGuest": false,
+      "role": "ADMIN | USER",
+      "bio": "string",           // 个性签名
+      "status": "ACTIVE",         // 账户状态
+      "lastLoginAt": "2024-01-01T00:00:00", // 最后登录时间
       "createdAt": "2024-01-01T00:00:00"
     }
   },
@@ -75,12 +77,15 @@ interface Result<T> {
 
 **路径**: `POST /v1/auth/register`
 
+**说明**: 注册前需先调用发送验证码接口获取验证码
+
 **请求体**:
 ```json
 {
-  "username": "string",  // 用户名
-  "email": "string",     // 邮箱
-  "password": "string"   // 密码
+  "username": "string",  // 用户名（4-20位字母数字组合，唯一）
+  "email": "string",     // 邮箱（有效邮箱格式，唯一）
+  "password": "string",   // 密码（6-20位）
+  "code": "string"        // 邮箱验证码（必填，需先调用发送验证码接口）
 }
 ```
 
@@ -93,9 +98,7 @@ interface Result<T> {
     "id": "string",
     "username": "string",
     "email": "string",
-    "avatarUrl": "string",
     "role": "USER",
-    "isGuest": false,
     "createdAt": "2024-01-01T00:00:00"
   },
   "traceId": "string"
@@ -104,7 +107,38 @@ interface Result<T> {
 
 ---
 
-### 3. 获取当前用户
+### 3. 发送验证码
+
+**路径**: `POST /v1/auth/send-code`
+
+**说明**: 发送邮箱验证码，用于注册
+
+**请求体**:
+```json
+{
+  "email": "string",                    // 邮箱地址
+  "type": "REGISTER"                    // 验证码类型（仅支持注册）
+}
+```
+
+**成功响应** (code=0):
+```json
+{
+  "code": 0,
+  "message": "验证码发送成功",
+  "data": null,
+  "traceId": "string"
+}
+```
+
+**业务规则**:
+- 验证码有效期：5分钟
+- 同一邮箱每分钟最多发送1次
+- 每天最多发送5次
+
+---
+
+### 4. 获取当前用户
 
 **路径**: `GET /v1/auth/me`
 
@@ -121,8 +155,10 @@ interface Result<T> {
     "displayName": "string",
     "email": "string",
     "avatarUrl": "string",
-    "role": "string",
-    "isGuest": false,
+    "role": "ADMIN | USER",
+    "bio": "string",
+    "status": "ACTIVE",
+    "lastLoginAt": "2024-01-01T00:00:00",
     "createdAt": "2024-01-01T00:00:00"
   },
   "traceId": "string"
@@ -131,9 +167,11 @@ interface Result<T> {
 
 ---
 
-### 4. 用户登出
+### 5. 用户登出
 
 **路径**: `POST /v1/auth/logout`
+
+**认证**: 需要登录
 
 **请求体**:
 ```json
@@ -146,7 +184,7 @@ interface Result<T> {
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "退出登录成功",
   "data": null,
   "traceId": "string"
 }
@@ -154,41 +192,59 @@ interface Result<T> {
 
 ---
 
-### 5. 访客登录
+### 6. 刷新Token
 
-**路径**: `POST /v1/auth/guest-login`
+**路径**: `POST /v1/auth/refresh`
 
-**说明**: 无需登录，用于匿名访客访问受限资源
+**说明**: 使用RefreshToken获取新的AccessToken
+
+**请求体**:
+```json
+{
+  "refreshToken": "string"  // 刷新令牌
+}
+```
 
 **成功响应** (code=0):
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "Token刷新成功",
   "data": {
-    "token": "string",       // 临时令牌
-    "userId": "string",      // 用户ID
-    "displayName": "string", // 显示名称
-    "role": "GUEST",         // 角色
-    "expiresAt": "2024-01-01T00:00:00"  // 过期时间
+    "token": "string",      // 新的AccessToken
+    "expiresIn": 86400      // 过期时间（秒）
   },
   "traceId": "string"
 }
 ```
 
+**业务规则**:
+- RefreshToken有效期：7天
+- AccessToken有效期：24小时
+- RefreshToken过期后需重新登录
+
 ---
 
-### 6. 删除访客
+### 7. 修改密码
 
-**路径**: `DELETE /v1/auth/guest`
+**路径**: `PUT /v1/auth/password`
 
-**认证**: 需要登录（访客身份）
+**说明**: 修改密码，使用邮箱+验证码验证，无需登录
+
+**请求体**:
+```json
+{
+  "email": "string",      // 邮箱
+  "code": "string",       // 验证码（需先调用发送验证码接口）
+  "newPassword": "string" // 新密码（6-20位）
+}
+```
 
 **成功响应** (code=0):
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "密码修改成功",
   "data": null,
   "traceId": "string"
 }
@@ -899,15 +955,117 @@ interface Result<T> {
 
 ---
 
+## 留言板模块
+
+### 1. 创建留言
+
+**路径**: `POST /v1/guestbook`
+
+**认证**: 需要登录（支持访客登录）
+
+**请求体**:
+```json
+{
+  "content": "string",  // 留言内容（必填，最大100字符）
+  "nickname": "string"  // 昵称（可选）
+}
+```
+
+**成功响应** (code=0):
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": "string",
+    "userId": "string",
+    "nickname": "string",
+    "content": "string",
+    "status": "APPROVED",
+    "createdAt": "2024-01-01T00:00:00"
+  },
+  "traceId": "string"
+}
+```
+
+---
+
+### 2. 获取留言列表
+
+**路径**: `GET /v1/guestbook`
+
+**查询参数**:
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| page | number | 0 | 页码 |
+| size | number | 50 | 每页数量 |
+
+**成功响应** (code=0):
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "content": [
+      {
+        "id": "string",
+        "userId": "string",
+        "nickname": "string",
+        "content": "string",
+        "status": "APPROVED",
+        "createdAt": "2024-01-01T00:00:00"
+      }
+    ],
+    "totalPages": 10,
+    "totalElements": 500
+  },
+  "traceId": "string"
+}
+```
+
+---
+
+### 3. 删除留言
+
+**路径**: `DELETE /v1/guestbook/{id}`
+
+**认证**: 需要登录（管理员或留言作者）
+
+**路径参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| id | string | 留言ID |
+
+**成功响应** (code=0):
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": null,
+  "traceId": "string"
+}
+```
+
+---
+
 ## 错误码说明
 
 | 错误码 | 说明 |
 |--------|------|
 | 0 | 成功 |
-| 400 | 请求参数错误 |
+| 1001 | 参数错误 |
+| 1002 | 用户名已存在 |
+| 1003 | 邮箱已存在 |
+| 1004 | 用户名或密码错误 |
+| 1005 | 验证码错误或已过期 |
+| 1006 | Token无效或已过期 |
+| 1007 | 无权限访问 |
+| 1008 | 账户已被禁用 |
+| 1009 | 验证码发送过于频繁 |
 | 401 | 未认证（需要登录） |
 | 403 | 无权限 |
 | 404 | 资源不存在 |
+| 429 | 请求过于频繁 |
 | 500 | 服务器内部错误 |
 
 ---
@@ -916,14 +1074,13 @@ interface Result<T> {
 
 | 文件路径 | 模块 | 接口数量 |
 |----------|------|----------|
-| `src/api/auth.ts` | 认证 | 4 |
+| `src/api/auth.ts` | 认证 | 7 |
 | `src/api/article.ts` | 文章 | 10 |
 | `src/api/comment.ts` | 评论 | 4 |
 | `src/api/reaction.ts` | 点赞 | 2 |
-| `src/api/question.ts` | 问答 | 6 |
-| `src/api/profile.ts` | 用户资料 | 2 |
+| `src/api/profile.ts` | 用户资料 | 3 |
 | `src/api/about.ts` | 关于页面 | 2 |
-| `src/api/guest.ts` | 访客 | 2 |
+| `src/api/guestbook.ts` | 留言板 | 3 |
 
 ---
 
@@ -931,4 +1088,7 @@ interface Result<T> {
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v1.0 | 2024-01-01 | 初始版本 |
+| v1.3 | 2026-06-14 | 修改密码接口（邮箱+验证码）、移除访客登录、文章分类标签增删改仅管理员可用、移除问答模块 |
+| v1.2 | 2026-06-13 | 新增发送验证码、刷新Token、修改签名接口 |
+| v1.1 | 2026-06-12 | 新增留言板模块接口 |
+| v1.0 | 2026-06-11 | 初始版本 |

@@ -10,3 +10,11 @@ export async function updateUserProfile(userId: string, dto: UpdateUserProfileDT
   const response = await axios.put(`/v1/users/${userId}/profile`, dto)
   return response.data
 }
+
+/**
+ * 管理员修改用户签名
+ */
+export async function updateUserBio(userId: string, bio: string): Promise<Result<{ userId: string; bio: string }>> {
+  const response = await axios.put(`/v1/admin/users/${userId}/bio`, { bio })
+  return response.data
+}

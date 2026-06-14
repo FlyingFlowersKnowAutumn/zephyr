@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { createGuestbook, getGuestbookList } from '@/api/guestbook'
 import Header from '@/components/layout/Header.vue'
+import type { GuestbookDTO } from '@/types'
 
 interface DanmakuItem {
   id: number
@@ -12,10 +15,12 @@ interface DanmakuItem {
 }
 
 const router = useRouter()
+const authStore = useAuthStore()
 const message = ref('')
 const danmakuList = ref<DanmakuItem[]>([])
 const danmakuContainer = ref<HTMLElement | null>(null)
 const isInputFocused = ref(false)
+const guestbookMessages = ref<GuestbookDTO[]>([])
 let danmakuId = 0
 let animationFrameId: number | null = null
 
@@ -66,18 +71,58 @@ function generateDanmaku(text: string): DanmakuItem {
   }
 }
 
-function sendDanmaku() {
-  router.push('/login')
+async function sendDanmaku() {
+  if (!message.value.trim()) return
+  
+  if (!authStore.isLoggedIn) {
+    router.push('/login')
+    return
+  }
+  
+  try {
+    const result = await createGuestbook({
+      content: message.value.trim(),
+      nickname: authStore.user?.displayName || authStore.user?.username
+    })
+    
+    if (result.code === 0 && result.data) {
+      const danmaku = generateDanmaku(message.value.trim())
+      danmakuList.value.push(danmaku)
+      
+      setTimeout(() => {
+        danmakuList.value = danmakuList.value.filter(d => d.id !== danmaku.id)
+      }, danmaku.speed * 100)
+      
+      message.value = ''
+    }
+  } catch (error) {
+    console.error('发送留言失败:', error)
+  }
 }
 
 function animateDanmakus() {
   animationFrameId = requestAnimationFrame(animateDanmakus)
 }
 
-onMounted(() => {
+async function loadGuestbookMessages() {
+  try {
+    const result = await getGuestbookList({ page: 0, size: 20 })
+    if (result.code === 0 && result.data) {
+      guestbookMessages.value = result.data.content
+    }
+  } catch (error) {
+    console.error('加载留言失败:', error)
+  }
+}
+
+onMounted(async () => {
   currentBackground.value = getRandomBackground()
   
-  initialDanmakus.forEach((text, index) => {
+  await loadGuestbookMessages()
+  
+  const allMessages = [...initialDanmakus, ...guestbookMessages.value.map(m => m.content)]
+  
+  allMessages.forEach((text, index) => {
     setTimeout(() => {
       const danmaku = generateDanmaku(text)
       danmakuList.value.push(danmaku)
@@ -92,7 +137,10 @@ onMounted(() => {
   
   setInterval(() => {
     if (danmakuList.value.length < 15) {
-      const randomText = initialDanmakus[Math.floor(Math.random() * initialDanmakus.length)]
+      const messagesPool = guestbookMessages.value.length > 0 
+        ? guestbookMessages.value.map(m => m.content)
+        : initialDanmakus
+      const randomText = messagesPool[Math.floor(Math.random() * messagesPool.length)]
       const danmaku = generateDanmaku(randomText)
       danmakuList.value.push(danmaku)
       

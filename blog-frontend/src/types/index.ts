@@ -5,12 +5,14 @@ export interface UserDTO {
   email: string
   avatarUrl: string
   role: string
-  isGuest: boolean
+  bio?: string        // 个性签名
+  status?: string     // 账户状态
+  lastLoginAt?: string // 最后登录时间
   createdAt: string
 }
 
 export interface LoginDTO {
-  username: string
+  username: string    // 用户名或邮箱
   password: string
 }
 
@@ -18,20 +20,37 @@ export interface RegisterDTO {
   username: string
   email: string
   password: string
+  code: string        // 邮箱验证码（必填）
+}
+
+/**
+ * 修改密码（邮箱+验证码）
+ */
+export interface UpdatePasswordDTO {
+  email: string       // 邮箱
+  code: string        // 验证码
+  newPassword: string // 新密码
+}
+
+/**
+ * 发送验证码
+ */
+export interface SendCodeDTO {
+  email: string        // 邮箱
+  type: 'REGISTER' | 'FORGOT_PASSWORD' // 验证码类型
+}
+
+/**
+ * 刷新Token
+ */
+export interface RefreshTokenDTO {
+  refreshToken: string
 }
 
 export interface LoginResponseDTO {
   token: string
   refreshToken: string
   user: UserDTO
-}
-
-export interface GuestLoginResponseDTO {
-  token: string
-  userId: string
-  displayName: string
-  role: string
-  expiresAt: string
 }
 
 export interface Result<T> {
@@ -129,55 +148,16 @@ export interface ReactionResponseDTO {
   likeCount: number
 }
 
-export interface QuestionDTO {
-  id: string
-  userId: string
-  userName?: string
-  title: string
-  content: string
-  status: string
-  isPublic: boolean
-  answers: AnswerDTO[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface QuestionCreateDTO {
-  title: string
-  content: string
-  isPublic: boolean
-}
-
-export interface AnswerDTO {
-  id: string
-  questionId: string
-  userId: string
-  userName?: string
-  content: string
-  isAccepted: boolean
-  status: string
-  createdAt: string
-}
-
 export interface UserProfileDTO {
   userId: string
   displayName?: string
   bio?: string
   avatarUrl?: string
-  website?: string
-  github?: string
-  twitter?: string
-  about?: string
 }
 
 export interface UpdateUserProfileDTO {
   displayName?: string
-  bio?: string
   avatarUrl?: string
-  website?: string
-  github?: string
-  twitter?: string
-  about?: string
 }
 
 export interface AboutDTO {
@@ -190,4 +170,18 @@ export interface UpdateAboutDTO {
   content?: string
   skills?: string[]
   socialLinks?: string
+}
+
+export interface GuestbookDTO {
+  id: string
+  userId: string
+  nickname?: string
+  content: string
+  status: string
+  createdAt: string
+}
+
+export interface GuestbookCreateDTO {
+  content: string
+  nickname?: string
 }
