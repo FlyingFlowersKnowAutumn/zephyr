@@ -19,13 +19,13 @@ const latestArticles = ref<any[]>([])
 const profile = computed(() => {
   if (authStore.isLoggedIn && authStore.user) {
     return {
-      avatar: authStore.user.avatarUrl || '/blog.png',
+      avatar: authStore.user.avatarUrl,
       name: authStore.user.displayName || authStore.user.username || authStore.user.email || '用户',
       bio: '记录技术与生活'
     }
   }
   return {
-    avatar: '/blog.png',
+    avatar: null,
     name: '博主名字',
     bio: '记录技术与生活'
   }
@@ -76,7 +76,8 @@ function formatDate(dateString?: string) {
   <aside class="sidebar">
     <div class="sidebar-card profile-card">
       <div class="avatar">
-        <img :src="profile.avatar" alt="avatar" />
+        <img v-if="profile.avatar" :src="profile.avatar" alt="avatar" />
+        <span v-else class="avatar-placeholder">{{ profile.name.charAt(0).toUpperCase() }}</span>
       </div>
       <h3 class="profile-name">{{ profile.name }}</h3>
       <p class="profile-bio">{{ profile.bio }}</p>
@@ -223,12 +224,26 @@ function formatDate(dateString?: string) {
   margin: 0 auto 1rem;
   border-radius: 50%;
   overflow: hidden;
-  border: 3px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 1.5rem;
+    font-weight: 600;
   }
 }
 

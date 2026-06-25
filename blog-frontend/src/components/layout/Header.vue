@@ -144,10 +144,12 @@ function handleSearch() {
             </button>
             <div v-show="showUserMenu" class="user-dropdown">
               <div class="dropdown-header">
-                <img v-if="authStore.user?.avatarUrl" :src="authStore.user.avatarUrl" alt="avatar" />
+                <div class="dropdown-avatar">
+                  <img v-if="authStore.user?.avatarUrl" :src="authStore.user.avatarUrl" alt="avatar" />
+                  <span v-else class="avatar-placeholder">{{ (authStore.user?.displayName || authStore.user?.username || '用户').charAt(0).toUpperCase() }}</span>
+                </div>
                 <div class="user-info">
                   <span class="username">{{ authStore.user?.displayName || authStore.user?.username || '用户' }}</span>
-                  <span class="user-level">Lv.1</span>
                 </div>
               </div>
               <div class="dropdown-divider"></div>
@@ -270,19 +272,19 @@ function handleSearch() {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
   overflow: hidden;
   
   &:hover {
     transform: scale(1.08);
-    box-shadow: 0 6px 20px rgba(255, 107, 157, 0.5);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
   }
   
   img {
@@ -339,15 +341,34 @@ function handleSearch() {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(135deg, #fef3f8 0%, #fce7f3 100%);
+  background: white;
   
-  img {
+  .dropdown-avatar {
     width: 50px;
     height: 50px;
     border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid white;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .avatar-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
   }
   
   .user-info {
@@ -360,15 +381,6 @@ function handleSearch() {
     font-size: 1rem;
     font-weight: 600;
     color: #1a1a1a;
-  }
-  
-  .user-level {
-    font-size: 0.75rem;
-    color: var(--color-accent);
-    background: rgba(0, 212, 255, 0.1);
-    padding: 2px 8px;
-    border-radius: 10px;
-    align-self: flex-start;
   }
 }
 

@@ -68,6 +68,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('user')
   }
 
+  function updateUser(data: Partial<UserDTO>) {
+    if (!user.value) return
+    user.value = { ...user.value, ...data }
+    localStorage.setItem('user', JSON.stringify(user.value))
+  }
+
   return {
     token,
     user,
@@ -76,6 +82,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     fetchCurrentUser,
-    logout
+    logout,
+    updateUser
   }
 })

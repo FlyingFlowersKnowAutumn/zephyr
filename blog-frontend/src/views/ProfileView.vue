@@ -160,6 +160,11 @@ async function saveProfile() {
     })
     if (result.code === 0 && result.data) {
       profile.value = result.data
+      authStore.updateUser({
+        displayName: form.value.displayName,
+        avatarUrl: form.value.avatarUrl,
+        bio: form.value.bio
+      })
     } else {
       error.value = result.message || '保存失败'
     }
@@ -645,7 +650,7 @@ function switchTab(tab: string) {
       display: flex;
       align-items: center;
       gap: 1rem;
-      padding-top: 0.25rem;
+      padding-top: 0.20rem;
 
       .radio-item {
         display: flex;
@@ -663,7 +668,8 @@ function switchTab(tab: string) {
           width: 14px;
           height: 14px;
           border-radius: 50%;
-          border: 2px solid rgba(255, 255, 255, 0.5);
+          background: white;
+          border: 2px solid white;
           position: relative;
           transition: all 0.2s ease;
 
@@ -683,6 +689,7 @@ function switchTab(tab: string) {
 
         input[type="radio"]:checked + .radio-dot {
           border-color: #4a90d9;
+          background: white;
 
           &::before {
             transform: translate(-50%, -50%) scale(1);
