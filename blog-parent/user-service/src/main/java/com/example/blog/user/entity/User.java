@@ -39,13 +39,6 @@ public class User {
     @Builder.Default
     private String role = "user";
 
-    @Column(name = "is_guest")
-    @Builder.Default
-    private Boolean isGuest = false;
-
-    @Column(name = "guest_expires_at")
-    private LocalDateTime guestExpiresAt;
-
     @Column(name = "display_name", length = 100)
     private String displayName;
 
@@ -64,4 +57,5 @@ public class User {
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
+
 }

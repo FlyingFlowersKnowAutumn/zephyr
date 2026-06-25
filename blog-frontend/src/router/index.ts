@@ -53,22 +53,6 @@ const router = createRouter({
       component: () => import('@/views/SearchView.vue')
     },
     {
-      path: '/questions',
-      name: 'Questions',
-      component: () => import('@/views/QuestionsView.vue')
-    },
-    {
-      path: '/questions/ask',
-      name: 'AskQuestion',
-      component: () => import('@/views/AskQuestionView.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/questions/:id',
-      name: 'QuestionDetail',
-      component: () => import('@/views/QuestionDetailView.vue')
-    },
-    {
       path: '/profile',
       name: 'Profile',
       component: () => import('@/views/ProfileView.vue'),

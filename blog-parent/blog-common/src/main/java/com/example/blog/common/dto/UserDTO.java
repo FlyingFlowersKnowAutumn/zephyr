@@ -18,6 +18,5 @@ public class UserDTO {
     private String email;
     private String avatarUrl;
     private String role;
-    private Boolean isGuest;
     private LocalDateTime createdAt;
 }

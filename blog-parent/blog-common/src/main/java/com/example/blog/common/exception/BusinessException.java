@@ -38,4 +38,8 @@ public class BusinessException extends RuntimeException {
     public static BusinessException serverError(String message) {
         return new BusinessException(3001, message);
     }
+
+    public static BusinessException tooManyRequests(String message) {
+        return new BusinessException(4001, message);
+    }
 }

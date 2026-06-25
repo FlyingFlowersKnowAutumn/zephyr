@@ -2,8 +2,7 @@ package com.example.blog.common.enums;
 
 public enum RoleEnum {
     USER("user"),
-    BLOGGER("blogger"),
-    GUEST("guest");
+    BLOGGER("blogger");
 
     private final String value;
 

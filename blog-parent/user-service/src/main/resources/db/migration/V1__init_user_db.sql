@@ -6,8 +6,6 @@ CREATE TABLE users (
     avatar_url TEXT,
     bio TEXT,
     role VARCHAR(20) DEFAULT 'user',
-    is_guest BOOLEAN DEFAULT false,
-    guest_expires_at TIMESTAMPTZ,
     display_name VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -16,7 +14,6 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_guest_expires ON users(guest_expires_at) WHERE is_guest = true;
 
 CREATE TABLE user_profiles (
     user_id UUID PRIMARY KEY REFERENCES users(id),

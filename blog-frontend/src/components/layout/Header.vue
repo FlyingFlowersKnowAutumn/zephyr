@@ -13,6 +13,21 @@ const isVisible = ref(true)
 const authStore = useAuthStore()
 const router = useRouter()
 const showUserMenu = ref(false)
+let hideMenuTimer: ReturnType<typeof setTimeout> | null = null
+
+function handleMouseEnter() {
+  if (hideMenuTimer) {
+    clearTimeout(hideMenuTimer)
+    hideMenuTimer = null
+  }
+  showUserMenu.value = true
+}
+
+function handleMouseLeave() {
+  hideMenuTimer = setTimeout(() => {
+    showUserMenu.value = false
+  }, 150)
+}
 
 async function handleLogout() {
   await authStore.logout()
@@ -122,7 +137,7 @@ function handleSearch() {
           <RouterLink v-if="!authStore.isLoggedIn" to="/login" class="login-btn">
             登录
           </RouterLink>
-          <div v-else class="user-menu-wrapper" @mouseenter="showUserMenu = true" @mouseleave="showUserMenu = false">
+          <div v-else class="user-menu-wrapper" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
             <button class="user-avatar-btn">
               <img v-if="authStore.user?.avatarUrl" :src="authStore.user.avatarUrl" alt="avatar" />
               <span v-else class="avatar-placeholder">{{ authStore.user?.username?.charAt(0) || 'U' }}</span>
@@ -248,6 +263,7 @@ function handleSearch() {
   position: relative;
   display: flex;
   align-items: center;
+  padding-bottom: 8px;
 }
 
 .user-avatar-btn {
@@ -284,7 +300,7 @@ function handleSearch() {
 
 .user-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: 100%;
   right: 0;
   width: 240px;
   background: white;
@@ -370,11 +386,16 @@ function handleSearch() {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
+  width: 100%;
   color: #666;
   font-size: 0.875rem;
   cursor: pointer;
   transition: background 0.2s ease;
   text-decoration: none;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
   
   &:hover {
     background: #f8f9fa;

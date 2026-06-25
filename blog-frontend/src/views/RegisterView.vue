@@ -2,9 +2,11 @@
 import { ref, onMounted, onBeforeMount, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { ElMessage } from 'element-plus'
 
 import gsap from 'gsap'
 import Header from '@/components/layout/Header.vue'
+import * as authApi from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -26,22 +28,45 @@ onBeforeMount(() => {
 
 async function handleRegister() {
   if (!username.value.trim() || !password.value.trim() || !email.value.trim() || !captcha.value.trim()) {
+    ElMessage.warning('请填写所有必填项')
     return
   }
   
   isLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await authStore.register({
+      username: username.value,
+      email: email.value,
+      password: password.value,
+      code: captcha.value
+    })
+    ElMessage.success('注册成功，请登录')
+    router.push('/login')
+  } catch (error: any) {
+    ElMessage.error(error.message || '注册失败')
   } finally {
     isLoading.value = false
   }
 }
 
 async function getCaptcha() {
-  if (!email.value.trim()) return
+  if (!email.value.trim()) {
+    ElMessage.warning('请先填写邮箱')
+    return
+  }
   
   isCaptchaDisabled.value = true
   captchaBtnText.value = '60s'
+  
+  try {
+    await authApi.sendCode({ email: email.value, type: 'REGISTER' })
+    ElMessage.success('验证码发送成功')
+  } catch (error: any) {
+    ElMessage.error(error.message || '验证码发送失败')
+    isCaptchaDisabled.value = false
+    captchaBtnText.value = '验证码'
+    return
+  }
   
   let count = 60
   const timer = setInterval(() => {

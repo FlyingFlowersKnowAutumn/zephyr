@@ -22,4 +22,7 @@ public class RegisterDTO {
     @NotBlank(message = "密码不能为空")
     @Size(min = 8, message = "密码长度至少8位")
     private String password;
+    
+    @NotBlank(message = "验证码不能为空")
+    private String code;
 }

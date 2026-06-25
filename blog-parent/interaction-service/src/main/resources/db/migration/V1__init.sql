@@ -23,29 +23,15 @@ CREATE TABLE reactions (
 
 CREATE UNIQUE INDEX idx_reactions_unique ON reactions(user_id, article_id);
 
-CREATE TABLE questions (
+CREATE TABLE guestbook (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL,
-    title           VARCHAR(255) NOT NULL,
     content         TEXT NOT NULL,
-    status          VARCHAR(20) DEFAULT 'open' NOT NULL,
-    is_public       BOOLEAN DEFAULT true NOT NULL,
-    created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    updated_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX idx_questions_status ON questions(status);
-
-CREATE TABLE answers (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    question_id     UUID NOT NULL REFERENCES questions(id),
-    user_id         UUID NOT NULL,
-    content         TEXT NOT NULL,
-    is_accepted     BOOLEAN DEFAULT false NOT NULL,
-    status          VARCHAR(20) DEFAULT 'published' NOT NULL,
+    status          VARCHAR(20) DEFAULT 'approved' NOT NULL,
     created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     deleted_at      TIMESTAMPTZ
 );
 
-CREATE INDEX idx_answers_question ON answers(question_id);
+CREATE INDEX idx_guestbook_user ON guestbook(user_id);
+CREATE INDEX idx_guestbook_status ON guestbook(status);

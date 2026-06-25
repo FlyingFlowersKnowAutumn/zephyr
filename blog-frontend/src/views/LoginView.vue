@@ -2,9 +2,11 @@
 import { ref, onMounted, onBeforeMount, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { ElMessage } from 'element-plus'
 
 import gsap from 'gsap'
 import Header from '@/components/layout/Header.vue'
+import * as authApi from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -36,12 +38,19 @@ onBeforeMount(() => {
 
 async function handleLogin() {
   if (!username.value.trim() || !password.value.trim()) {
+    ElMessage.warning('请填写邮箱/用户名和密码')
     return
   }
   isLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await authStore.login({
+      username: username.value,
+      password: password.value
+    })
+    ElMessage.success('登录成功')
     router.push('/')
+  } catch (error: any) {
+    ElMessage.error(error.message || '登录失败')
   } finally {
     isLoading.value = false
   }
@@ -49,12 +58,19 @@ async function handleLogin() {
 
 async function handlePasswordlessLogin() {
   if (!email.value.trim() || !captcha.value.trim()) {
+    ElMessage.warning('请填写邮箱和验证码')
     return
   }
   isLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await authStore.login({
+      username: email.value,
+      password: captcha.value
+    })
+    ElMessage.success('登录成功')
     router.push('/')
+  } catch (error: any) {
+    ElMessage.error(error.message || '登录失败')
   } finally {
     isLoading.value = false
   }
@@ -62,12 +78,27 @@ async function handlePasswordlessLogin() {
 
 async function handleRegister() {
   if (!username.value.trim() || !password.value.trim() || !email.value.trim() || !captcha.value.trim()) {
+    ElMessage.warning('请填写所有必填项')
     return
   }
   
   isLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await authStore.register({
+      username: username.value,
+      email: email.value,
+      password: password.value,
+      code: captcha.value
+    })
+    ElMessage.success('注册成功，请登录')
+    isLoginMode.value = true
+    isPasswordlessMode.value = false
+    username.value = ''
+    password.value = ''
+    email.value = ''
+    captcha.value = ''
+  } catch (error: any) {
+    ElMessage.error(error.message || '注册失败')
   } finally {
     isLoading.value = false
   }
@@ -75,16 +106,24 @@ async function handleRegister() {
 
 async function handleResetPassword() {
   if (!resetEmail.value.trim() || !resetCaptcha.value.trim() || !resetNewPassword.value.trim()) {
+    ElMessage.warning('请填写所有必填项')
     return
   }
   
   isLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await authApi.updatePassword({
+      email: resetEmail.value,
+      code: resetCaptcha.value,
+      newPassword: resetNewPassword.value
+    })
+    ElMessage.success('密码修改成功')
     showResetModal.value = false
     resetEmail.value = ''
     resetCaptcha.value = ''
     resetNewPassword.value = ''
+  } catch (error: any) {
+    ElMessage.error(error.message || '密码修改失败')
   } finally {
     isLoading.value = false
   }
@@ -92,10 +131,24 @@ async function handleResetPassword() {
 
 async function getCaptcha() {
   const targetEmail = isPasswordlessMode.value ? email.value : (isLoginMode.value ? email.value : email.value)
-  if (!targetEmail.trim()) return
+  if (!targetEmail.trim()) {
+    ElMessage.warning('请先填写邮箱')
+    return
+  }
   
   isCaptchaDisabled.value = true
   captchaBtnText.value = '60s'
+  
+  try {
+    const type = isLoginMode.value && !isPasswordlessMode.value ? 'FORGOT_PASSWORD' : 'REGISTER'
+    await authApi.sendCode({ email: targetEmail, type })
+    ElMessage.success('验证码发送成功')
+  } catch (error: any) {
+    ElMessage.error(error.message || '验证码发送失败')
+    isCaptchaDisabled.value = false
+    captchaBtnText.value = '验证码'
+    return
+  }
   
   let count = 60
   const timer = setInterval(() => {
@@ -111,10 +164,23 @@ async function getCaptcha() {
 }
 
 async function getResetCaptcha() {
-  if (!resetEmail.value.trim()) return
+  if (!resetEmail.value.trim()) {
+    ElMessage.warning('请先填写邮箱')
+    return
+  }
   
   isResetCaptchaDisabled.value = true
   resetCaptchaBtnText.value = '60s'
+  
+  try {
+    await authApi.sendCode({ email: resetEmail.value, type: 'FORGOT_PASSWORD' })
+    ElMessage.success('验证码发送成功')
+  } catch (error: any) {
+    ElMessage.error(error.message || '验证码发送失败')
+    isResetCaptchaDisabled.value = false
+    resetCaptchaBtnText.value = '验证码'
+    return
+  }
   
   let count = 60
   const timer = setInterval(() => {
@@ -233,11 +299,11 @@ onUnmounted(() => {
           
           <form v-if="isLoginMode && !isPasswordlessMode" class="login-form" @submit.prevent="handleLogin">
             <div class="form-group">
-              <label class="form-label">邮箱</label>
+              <label class="form-label">邮箱/用户名</label>
               <input
                 v-model="username"
-                type="email"
-                placeholder="邮箱"
+                type="text"
+                placeholder="邮箱或用户名"
                 class="form-input"
               />
             </div>
@@ -258,10 +324,7 @@ onUnmounted(() => {
             </div>
             
             <button type="submit" class="login-btn" :disabled="isLoading">
-              <svg v-if="isLoading" class="loading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <circle class="spin" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              <span>{{ isLoading ? '登录中...' : '登录' }}</span>
+              {{ isLoading ? '登录中...' : '登录' }}
             </button>
           </form>
           
@@ -296,10 +359,7 @@ onUnmounted(() => {
             </div>
             
             <button type="submit" class="login-btn" :disabled="isLoading">
-              <svg v-if="isLoading" class="loading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <circle class="spin" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              <span>{{ isLoading ? '登录中...' : '登录' }}</span>
+              {{ isLoading ? '登录中...' : '登录' }}
             </button>
           </form>
           
@@ -350,10 +410,7 @@ onUnmounted(() => {
             </div>
             
             <button type="submit" class="login-btn register-btn" :disabled="isLoading">
-              <svg v-if="isLoading" class="loading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <circle class="spin" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              <span>{{ isLoading ? '注册中...' : '注册' }}</span>
+              {{ isLoading ? '注册中...' : '注册' }}
             </button>
           </form>
         </div>
@@ -647,18 +704,6 @@ onUnmounted(() => {
   
   &:hover:not(:disabled) {
     box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
-  }
-}
-
-.loading-icon {
-  .spin {
-    animation: spin 1s linear infinite;
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 

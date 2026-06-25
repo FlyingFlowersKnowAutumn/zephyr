@@ -2,11 +2,10 @@ package com.example.blog.user.controller;
 
 import com.example.blog.common.Result;
 import com.example.blog.common.dto.*;
-import jakarta.validation.Valid;
 import com.example.blog.common.exception.BusinessException;
-import com.example.blog.user.service.GuestAuthService;
 import com.example.blog.user.service.JwtService;
 import com.example.blog.user.service.UserService;
+import com.example.blog.user.service.VerificationCodeService;
 import io.jsonwebtoken.Claims;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +21,8 @@ import java.util.UUID;
 public class AuthController {
 
     private final UserService userService;
-    private final GuestAuthService guestAuthService;
     private final JwtService jwtService;
+    private final VerificationCodeService verificationCodeService;
 
     @PostMapping("/register")
     public Result<UserDTO> register(@Valid @RequestBody RegisterDTO dto) {
@@ -33,17 +32,6 @@ public class AuthController {
     @PostMapping("/login")
     public Result<LoginResponseDTO> login(@Valid @RequestBody LoginDTO dto) {
         return Result.success(userService.login(dto));
-    }
-
-    @PostMapping("/guest-login")
-    public Result<GuestLoginResponseDTO> guestLogin() {
-        return Result.success(guestAuthService.guestLogin());
-    }
-
-    @DeleteMapping("/guest")
-    public Result<Void> deleteGuest(@RequestHeader("X-User-Id") String userId) {
-        guestAuthService.deleteGuest(UUID.fromString(userId));
-        return Result.success(null);
     }
 
     @PostMapping("/refresh")
@@ -57,7 +45,22 @@ public class AuthController {
         return Result.success(null);
     }
 
+    @PostMapping("/send-code")
+    public Result<Void> sendCode(@Valid @RequestBody SendCodeDTO dto) {
+        boolean success = verificationCodeService.sendCode(dto.getEmail(), dto.getType());
+        if (!success) {
+            throw BusinessException.tooManyRequests("验证码发送过于频繁");
+        }
+        return Result.success(null);
+    }
+
     @PutMapping("/password")
+    public Result<Void> resetPassword(@Valid @RequestBody ResetPasswordDTO dto) {
+        userService.resetPassword(dto);
+        return Result.success(null);
+    }
+
+    @PutMapping("/password/self")
     public Result<Void> updatePassword(
             @RequestHeader("Authorization") String authorization,
             @Valid @RequestBody UpdatePasswordDTO dto) {

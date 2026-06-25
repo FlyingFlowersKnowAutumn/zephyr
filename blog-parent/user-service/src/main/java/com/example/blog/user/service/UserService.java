@@ -1,10 +1,6 @@
 package com.example.blog.user.service;
 
-import com.example.blog.common.dto.LoginDTO;
-import com.example.blog.common.dto.LoginResponseDTO;
-import com.example.blog.common.dto.RegisterDTO;
-import com.example.blog.common.dto.UpdatePasswordDTO;
-import com.example.blog.common.dto.UserDTO;
+import com.example.blog.common.dto.*;
 import com.example.blog.common.enums.RoleEnum;
 import com.example.blog.common.exception.BusinessException;
 import com.example.blog.user.entity.User;
@@ -28,12 +24,17 @@ public class UserService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final VerificationCodeService verificationCodeService;
 
     private static final String REFRESH_TOKEN_PREFIX = "auth:refresh:";
     private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
 
     @Transactional
     public UserDTO register(RegisterDTO dto) {
+        if (!verificationCodeService.verifyCode(dto.getEmail(), dto.getCode())) {
+            throw BusinessException.badRequest("验证码错误或已过期");
+        }
+
         if (userRepository.existsByUsername(dto.getUsername())) {
             throw BusinessException.conflict("用户名已存在");
         }
@@ -50,13 +51,33 @@ public class UserService {
                 .build();
 
         User saved = userRepository.save(user);
+        verificationCodeService.deleteCode(dto.getEmail());
         log.info("User registered: id={}, username={}", saved.getId(), saved.getUsername());
         return convertToDTO(saved);
     }
 
+    @Transactional
+    public void resetPassword(ResetPasswordDTO dto) {
+        if (!verificationCodeService.verifyCode(dto.getEmail(), dto.getCode())) {
+            throw BusinessException.badRequest("验证码错误或已过期");
+        }
+
+        User user = userRepository.findByEmail(dto.getEmail())
+                .orElseThrow(() -> BusinessException.notFound("用户不存在"));
+
+        user.setPasswordHash(passwordEncoder.encode(dto.getNewPassword()));
+        userRepository.save(user);
+        verificationCodeService.deleteCode(dto.getEmail());
+        
+        log.info("User password reset: id={}, email={}", user.getId(), user.getEmail());
+    }
+
     @Transactional(readOnly = true)
     public LoginResponseDTO login(LoginDTO dto) {
-        User user = userRepository.findByUsername(dto.getUsername())
+        String loginId = dto.getUsername();
+        User user = (loginId.contains("@")
+                ? userRepository.findByEmail(loginId)
+                : userRepository.findByUsername(loginId))
                 .orElseThrow(() -> BusinessException.unauthorized("用户名或密码错误"));
 
         if (user.getDeletedAt() != null) {
@@ -129,7 +150,6 @@ public class UserService {
                 .email(user.getEmail())
                 .avatarUrl(user.getAvatarUrl())
                 .role(user.getRole())
-                .isGuest(user.getIsGuest())
                 .createdAt(user.getCreatedAt())
                 .build();
     }

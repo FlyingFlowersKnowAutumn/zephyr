@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { createGuestbook, getGuestbookList } from '@/api/guestbook'
 import Header from '@/components/layout/Header.vue'
 import type { GuestbookDTO } from '@/types'
+import gsap from 'gsap'
 
 interface DanmakuItem {
   id: number
@@ -33,7 +34,9 @@ const backgroundImages = [
   '/Note/wallhaven-qr3175_2560x1440.png',
   '/Note/wallhaven-w5lr6x_2560x1440.png',
   '/Note/wallhaven-yxpdpk_2560x1440.png',
-  '/Note/wallhaven-zp5o8o_2560x1440.png'
+  '/Note/wallhaven-zp5o8o_2560x1440.png',
+  '/dl.png',
+  '/blog.png'
 ]
 
 const currentBackground = ref('')
@@ -117,6 +120,18 @@ async function loadGuestbookMessages() {
 
 onMounted(async () => {
   currentBackground.value = getRandomBackground()
+
+  gsap.to('.page-mask', {
+    opacity: 0,
+    duration: 1,
+    ease: 'power2.out',
+    onComplete: () => {
+      const mask = document.querySelector('.page-mask')
+      if (mask) {
+        mask.setAttribute('style', 'pointer-events: none; opacity: 0;')
+      }
+    }
+  })
   
   await loadGuestbookMessages()
   
@@ -159,7 +174,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="guestbook-container" :style="{ backgroundImage: `url(${currentBackground})` }">
+  <div class="guestbook-container">
+    <div class="page-mask"></div>
+    <div class="background-layer" :style="{ backgroundImage: `url(${currentBackground})` }"></div>
     <Header />
     <div class="danmaku-container" ref="danmakuContainer">
       <div
@@ -202,9 +219,6 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .guestbook-container {
   min-height: 100vh;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   position: relative;
   overflow: hidden;
   
@@ -218,6 +232,30 @@ onUnmounted(() => {
     background: rgba(26, 26, 46, 0.4);
     z-index: 1;
   }
+}
+
+.page-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: white;
+  z-index: 9999;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.background-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
 }
 
 .danmaku-container {
@@ -340,17 +378,16 @@ onUnmounted(() => {
   padding: 0 1rem;
   font-size: 0.75rem;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  color: #333;
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 16px;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
   
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 0.7);
   }
   
   &:active {

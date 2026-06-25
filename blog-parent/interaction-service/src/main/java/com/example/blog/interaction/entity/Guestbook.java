@@ -11,19 +11,16 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "answers")
+@Table(name = "guestbook")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Answer {
+public class Guestbook {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-
-    @Column(name = "question_id", nullable = false)
-    private String questionId;
 
     @Column(name = "user_id", nullable = false)
     private String userId;
@@ -31,13 +28,9 @@ public class Answer {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "is_accepted", nullable = false)
-    @Builder.Default
-    private Boolean isAccepted = false;
-
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String status = "published";
+    private String status = "approved";
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -49,4 +42,8 @@ public class Answer {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
 }

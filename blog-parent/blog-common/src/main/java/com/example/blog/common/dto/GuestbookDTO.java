@@ -4,16 +4,18 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class GuestLoginResponseDTO {
-    private String token;
+public class GuestbookDTO {
+    private String id;
     private String userId;
-    private String displayName;
-    private String role;
-    private LocalDateTime expiresAt;
+    private String userName;
+    private String content;
+    private String status;
+    private LocalDateTime createdAt;
 }
