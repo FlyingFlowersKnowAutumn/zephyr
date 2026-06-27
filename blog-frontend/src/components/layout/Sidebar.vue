@@ -232,6 +232,7 @@ function formatDate(dateString?: string) {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.5s ease;
   }
 
   .avatar-placeholder {
@@ -244,6 +245,12 @@ function formatDate(dateString?: string) {
     color: white;
     font-size: 1.5rem;
     font-weight: 600;
+    transition: transform 0.5s ease;
+  }
+
+  &:hover img,
+  &:hover .avatar-placeholder {
+    transform: rotate(360deg);
   }
 }
 

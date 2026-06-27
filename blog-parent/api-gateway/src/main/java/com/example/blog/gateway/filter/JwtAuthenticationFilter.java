@@ -41,7 +41,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/tags",
             "/api/v1/about",
             "/api/v1/rss",
-            "/api/v1/sitemap"
+            "/api/v1/sitemap",
+            "/uploads"
     );
 
     @Override

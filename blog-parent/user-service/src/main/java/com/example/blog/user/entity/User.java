@@ -42,6 +42,8 @@ public class User {
     @Column(name = "display_name", length = 100)
     private String displayName;
 
+    private String gender;
+
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

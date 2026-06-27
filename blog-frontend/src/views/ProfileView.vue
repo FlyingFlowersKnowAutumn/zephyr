@@ -7,6 +7,7 @@ import type { UserProfileDTO } from '@/types'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import Header from '@/components/layout/Header.vue'
 import gsap from 'gsap'
+import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -171,11 +172,14 @@ async function saveProfile() {
         avatarUrl: form.value.avatarUrl,
         bio: form.value.bio
       })
+      ElMessage.success('保存成功')
     } else {
       error.value = result.message || '保存失败'
+      ElMessage.error(result.message || '保存失败')
     }
   } catch {
     error.value = '保存失败'
+    ElMessage.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -435,18 +439,29 @@ function switchTab(tab: string) {
         <button class="modal-close" @click="closeAvatarModal">×</button>
       </div>
       <div class="avatar-modal-body">
-        <div 
-          class="upload-area" 
+        <div
+          class="upload-area"
+          :class="{ 'has-file': selectedFile }"
           @click="triggerFileInput"
           @dragover.prevent
           @drop.prevent="handleDrop"
         >
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          <span>拖拽上传 / 点击上传</span>
+          <template v-if="selectedFile">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span class="file-name">{{ selectedFile.name }}</span>
+            <span class="file-size">{{ (selectedFile.size / 1024).toFixed(1) }} KB</span>
+          </template>
+          <template v-else>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>拖拽上传 / 点击上传</span>
+          </template>
         </div>
         <p class="upload-tip">一次最多上传1张图片，且每张图片不超过2M！</p>
         <input 
@@ -658,6 +673,16 @@ function switchTab(tab: string) {
   .avatar-wrapper {
     position: relative;
     display: inline-block;
+
+    .avatar,
+    .avatar-placeholder {
+      transition: transform 0.3s ease;
+    }
+
+    &:hover .avatar,
+    &:hover .avatar-placeholder {
+      transform: rotate(360deg);
+    }
   }
 
   .avatar {
@@ -1054,6 +1079,32 @@ function switchTab(tab: string) {
         color: #4a90d9;
       }
     }
+
+    &.has-file {
+      border-color: #52c41a;
+      border-style: solid;
+      background: #f6ffed;
+      color: #52c41a;
+
+      svg {
+        color: #52c41a;
+      }
+
+      span {
+        color: #333;
+      }
+    }
+  }
+
+  .file-name {
+    font-weight: 500;
+    word-break: break-all;
+    text-align: center;
+  }
+
+  .file-size {
+    font-size: 0.75rem;
+    color: #999;
   }
 
   .upload-tip {

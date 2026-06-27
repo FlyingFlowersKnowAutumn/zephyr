@@ -40,6 +40,7 @@ public class UserProfileService {
         if (dto.getDisplayName() != null) user.setDisplayName(dto.getDisplayName());
         if (dto.getBio() != null) user.setBio(dto.getBio());
         if (dto.getAvatarUrl() != null) user.setAvatarUrl(dto.getAvatarUrl());
+        if (dto.getGender() != null) user.setGender(dto.getGender());
         userRepository.save(user);
 
         UserProfile profile = userProfileRepository.findById(userId)
@@ -61,6 +62,7 @@ public class UserProfileService {
                 .displayName(user.getDisplayName())
                 .bio(user.getBio())
                 .avatarUrl(user.getAvatarUrl())
+                .gender(user.getGender())
                 .website(profile != null ? profile.getWebsite() : null)
                 .github(profile != null ? profile.getGithub() : null)
                 .twitter(profile != null ? profile.getTwitter() : null)

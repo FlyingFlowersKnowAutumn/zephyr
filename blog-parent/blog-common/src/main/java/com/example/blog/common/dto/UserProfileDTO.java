@@ -14,6 +14,7 @@ public class UserProfileDTO {
     private String displayName;
     private String bio;
     private String avatarUrl;
+    private String gender;
     private String website;
     private String github;
     private String twitter;
