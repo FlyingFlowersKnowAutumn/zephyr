@@ -153,11 +153,14 @@ export interface UserProfileDTO {
   displayName?: string
   bio?: string
   avatarUrl?: string
+  gender?: string
 }
 
 export interface UpdateUserProfileDTO {
   displayName?: string
   avatarUrl?: string
+  bio?: string
+  gender?: string
 }
 
 export interface AboutDTO {

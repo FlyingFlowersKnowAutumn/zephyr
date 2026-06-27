@@ -46,6 +46,11 @@ const form = ref({
 })
 const MAX_BIO_LENGTH = 500
 
+const avatarModalVisible = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const selectedFile = ref<File | null>(null)
+const uploading = ref(false)
+
 const targetUserId = computed(() => {
   const id = route.params.userId as string
   return id || authStore.user?.id || ''
@@ -140,7 +145,7 @@ function initForm(data: UserProfileDTO) {
   form.value = {
     displayName: data.displayName || authStore.user?.username || '',
     email: authStore.user?.email || '',
-    gender: 'secret',
+    gender: (data.gender as 'male' | 'female' | 'secret') || 'secret',
     bio: data.bio || '',
     avatarUrl: data.avatarUrl || authStore.user?.avatarUrl || ''
   }
@@ -156,7 +161,8 @@ async function saveProfile() {
     const result = await updateUserProfile(targetUserId.value, {
       displayName: form.value.displayName || undefined,
       bio: form.value.bio || undefined,
-      avatarUrl: form.value.avatarUrl || undefined
+      avatarUrl: form.value.avatarUrl || undefined,
+      gender: form.value.gender || undefined
     })
     if (result.code === 0 && result.data) {
       profile.value = result.data
@@ -172,6 +178,85 @@ async function saveProfile() {
     error.value = '保存失败'
   } finally {
     saving.value = false
+  }
+}
+
+function openAvatarModal() {
+  avatarModalVisible.value = true
+}
+
+function closeAvatarModal() {
+  avatarModalVisible.value = false
+  selectedFile.value = null
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+}
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function handleFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    validateAndSelectFile(file)
+  }
+}
+
+function handleDrop(event: DragEvent) {
+  const file = event.dataTransfer?.files[0]
+  if (file) {
+    validateAndSelectFile(file)
+  }
+}
+
+function validateAndSelectFile(file: File) {
+  const maxSize = 2 * 1024 * 1024
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  
+  if (!validTypes.includes(file.type)) {
+    alert('只支持 jpg、jpeg、png、gif、webp 格式的图片')
+    return
+  }
+  
+  if (file.size > maxSize) {
+    alert('图片大小不能超过 2MB')
+    return
+  }
+  
+  selectedFile.value = file
+}
+
+async function uploadAvatar() {
+  if (!selectedFile.value || !targetUserId.value) return
+  
+  uploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    
+    const response = await fetch(`/api/v1/users/${targetUserId.value}/avatar`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      },
+      body: formData
+    })
+    
+    const result = await response.json()
+    if (result.code === 0 && result.data?.avatarUrl) {
+      form.value.avatarUrl = result.data.avatarUrl
+      authStore.updateUser({ avatarUrl: result.data.avatarUrl })
+      closeAvatarModal()
+    } else {
+      alert(result.message || '上传失败')
+    }
+  } catch {
+    alert('上传失败')
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -257,7 +342,7 @@ function switchTab(tab: string) {
 
             <div v-else-if="profile" class="info-box">
                 <div class="avatar-section">
-                  <div class="avatar-wrapper">
+                  <div class="avatar-wrapper cursor-pointer" @click="openAvatarModal">
                     <img
                       v-if="form.avatarUrl"
                       :src="form.avatarUrl"
@@ -282,7 +367,6 @@ function switchTab(tab: string) {
                   <span class="form-label">邮箱：</span>
                   <div class="form-value email-row">
                     <span>{{ form.email }}</span>
-                    <button type="button" class="modify-btn">修改</button>
                   </div>
                 </div>
 
@@ -340,6 +424,43 @@ function switchTab(tab: string) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="avatarModalVisible" class="avatar-modal-overlay" @click="closeAvatarModal">
+    <div class="avatar-modal" @click.stop>
+      <div class="avatar-modal-header">
+        <span class="modal-title">修改头像</span>
+        <button class="modal-close" @click="closeAvatarModal">×</button>
+      </div>
+      <div class="avatar-modal-body">
+        <div 
+          class="upload-area" 
+          @click="triggerFileInput"
+          @dragover.prevent
+          @drop.prevent="handleDrop"
+        >
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span>拖拽上传 / 点击上传</span>
+        </div>
+        <p class="upload-tip">一次最多上传1张图片，且每张图片不超过2M！</p>
+        <input 
+          ref="fileInputRef"
+          type="file" 
+          accept="image/jpeg,image/png,image/gif,image/webp" 
+          class="file-input"
+          @change="handleFileSelect"
+        />
+      </div>
+      <div class="avatar-modal-footer">
+        <button class="upload-btn" :disabled="uploading || !selectedFile" @click="uploadAvatar">
+          {{ uploading ? '上传中...' : '上传' }}
+        </button>
       </div>
     </div>
   </div>
@@ -480,7 +601,7 @@ function switchTab(tab: string) {
 }
 
 .tab-content {
-  padding: 30px 20px;
+  padding: 15px 20px;
   width: 100%;
   flex: 1;
   overflow-y: auto;
@@ -489,6 +610,10 @@ function switchTab(tab: string) {
 
 .tab-pane {
   animation: fadeIn 0.3s ease;
+}
+
+.profile-pane {
+  padding-top: 0;
 }
 
 @keyframes fadeIn {
@@ -521,16 +646,18 @@ function switchTab(tab: string) {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  padding: 0.5rem 0;
+  padding: 0;
 }
 
 .avatar-section {
   text-align: center;
+  margin-bottom: 0.5rem;
+  padding-top: 0;
+  padding-bottom: 0;
 
   .avatar-wrapper {
     position: relative;
     display: inline-block;
-    margin-bottom: 1rem;
   }
 
   .avatar {
@@ -551,6 +678,8 @@ function switchTab(tab: string) {
     justify-content: center;
     font-size: 1.3rem;
     font-weight: 600;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 }
 
@@ -558,9 +687,11 @@ function switchTab(tab: string) {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  max-width: 100%;
+  max-width: 400px;
   margin: 0 auto;
   width: 100%;
+  padding-top: 10px;
+  padding-bottom: 10px;
 
   .form-row {
     display: flex;
@@ -574,7 +705,8 @@ function switchTab(tab: string) {
     text-align: right;
     font-size: 0.88rem;
     color: rgba(0, 0, 0, 0.7);
-    padding-top: 0.6rem;
+    padding-top: 9px;
+    padding-bottom: 9px;
   }
 
   .form-value {
@@ -619,30 +751,12 @@ function switchTab(tab: string) {
 
       span {
         flex: 1;
-        padding: 0.65rem 0.9rem;
+        padding: 0.65rem 0;
         background: transparent;
         border: 1px solid transparent;
         border-radius: 8px;
         color: rgba(0, 0, 0, 0.8);
         font-size: 0.88rem;
-      }
-
-      .modify-btn {
-        flex-shrink: 0;
-        padding: 0.35rem 0.65rem;
-        background: linear-gradient(135deg, #ffb347 0%, #ff8c00 100%);
-        color: white;
-        border: none;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-
-        &:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(255, 140, 0, 0.3);
-        }
       }
     }
 
@@ -650,7 +764,8 @@ function switchTab(tab: string) {
       display: flex;
       align-items: center;
       gap: 1rem;
-      padding-top: 0.20rem;
+      padding-top: 10px;
+      padding-bottom: 10px;
 
       .radio-item {
         display: flex;
@@ -833,6 +948,152 @@ function switchTab(tab: string) {
 
   .tab-content {
     padding: 1.5rem 1rem;
+  }
+}
+
+.avatar-section {
+  text-align: center;
+
+  .avatar-wrapper {
+    margin: 0 auto;
+  }
+
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  .avatar-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: rgba(0, 0, 0, 0.4);
+    margin-top: 0.5rem;
+  }
+}
+
+.avatar-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.avatar-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.avatar-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+
+  .modal-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .modal-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    font-size: 1.5rem;
+    color: #999;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      color: #666;
+    }
+  }
+}
+
+.avatar-modal-body {
+  padding: 20px;
+
+  .upload-area {
+    border: 2px dashed #d9d9d9;
+    border-radius: 8px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: #999;
+    transition: all 0.3s ease;
+
+    svg {
+      color: #999;
+    }
+
+    span {
+      font-size: 0.85rem;
+    }
+
+    &:hover {
+      border-color: #4a90d9;
+      color: #4a90d9;
+
+      svg {
+        color: #4a90d9;
+      }
+    }
+  }
+
+  .upload-tip {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 12px;
+  }
+
+  .file-input {
+    display: none;
+  }
+}
+
+.avatar-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: center;
+
+  .upload-btn {
+    padding: 10px 40px;
+    background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(82, 196, 26, 0.3);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   }
 }
 </style>
