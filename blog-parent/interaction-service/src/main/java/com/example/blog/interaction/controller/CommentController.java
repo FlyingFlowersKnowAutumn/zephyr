@@ -47,7 +47,8 @@ public class CommentController {
             @PathVariable String id,
             @RequestHeader("X-User-Id") String userId,
             @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
-        commentService.deleteComment(id, userId, "admin".equals(role));
+        boolean isAdmin = "blogger".equals(role) || "admin".equals(role);
+        commentService.deleteComment(id, userId, isAdmin);
         return Result.success(null);
     }
 
@@ -56,7 +57,7 @@ public class CommentController {
             @PathVariable String id,
             @Valid @RequestBody CommentStatusUpdateDTO dto,
             @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
-        if (!"admin".equals(role)) {
+        if (!"blogger".equals(role) && !"admin".equals(role)) {
             return Result.fail(1003, "权限不足");
         }
         commentService.updateStatus(id, dto);

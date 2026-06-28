@@ -4,11 +4,15 @@ import { RouterLink } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
 import { listCategories, listTags } from '@/api/article'
+import { getUserProfile } from '@/api/profile'
+
+const BLOGGER_ID = '6e2ca12d-5d59-43ee-a0b3-c7f50127fef8'
 
 const articleStore = useArticleStore()
 const authStore = useAuthStore()
 const categories = ref<string[]>([])
 const tags = ref<string[]>([])
+const bloggerProfile = ref<{ avatarUrl?: string; displayName?: string; bio?: string } | null>(null)
 const stats = ref({
   articles: 0,
   categories: 0,
@@ -16,12 +20,21 @@ const stats = ref({
 })
 const latestArticles = ref<any[]>([])
 
+const isBlogger = computed(() => authStore.user?.role === 'blogger')
+
 const profile = computed(() => {
-  if (authStore.isLoggedIn && authStore.user) {
+  if (authStore.isLoggedIn && isBlogger.value && authStore.user) {
     return {
       avatar: authStore.user.avatarUrl,
       name: authStore.user.displayName || authStore.user.username || authStore.user.email || '用户',
-      bio: '记录技术与生活'
+      bio: authStore.user.bio || '记录技术与生活'
+    }
+  }
+  if (bloggerProfile.value) {
+    return {
+      avatar: bloggerProfile.value.avatarUrl || null,
+      name: bloggerProfile.value.displayName || '博主',
+      bio: bloggerProfile.value.bio || '记录技术与生活'
     }
   }
   return {
@@ -48,7 +61,7 @@ onMounted(async () => {
     listTags(),
     articleStore.fetchArticles({ page: 1, size: 5, status: 'PUBLISHED' })
   ])
-  
+
   if (catResult.code === 0 && catResult.data) {
     categories.value = catResult.data
     stats.value.categories = catResult.data.length
@@ -59,6 +72,15 @@ onMounted(async () => {
   }
   stats.value.articles = articleResult.total
   latestArticles.value = articleResult.articles.slice(0, 3)
+
+  if (!isBlogger.value) {
+    try {
+      const result = await getUserProfile(BLOGGER_ID)
+      if (result.code === 0 && result.data) {
+        bloggerProfile.value = result.data
+      }
+    } catch { /* use placeholder */ }
+  }
 })
 
 function formatDate(dateString?: string) {

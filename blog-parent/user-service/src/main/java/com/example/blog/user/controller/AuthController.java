@@ -49,7 +49,7 @@ public class AuthController {
     public Result<Void> sendCode(@Valid @RequestBody SendCodeDTO dto) {
         boolean success = verificationCodeService.sendCode(dto.getEmail(), dto.getType());
         if (!success) {
-            throw BusinessException.tooManyRequests("验证码发送过于频繁");
+            throw BusinessException.tooManyRequests("请在倒计时结束后重试");
         }
         return Result.success(null);
     }

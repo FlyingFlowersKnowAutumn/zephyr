@@ -179,6 +179,7 @@ export interface GuestbookDTO {
   id: string
   userId: string
   nickname?: string
+  avatarUrl?: string
   content: string
   status: string
   createdAt: string
@@ -187,4 +188,5 @@ export interface GuestbookDTO {
 export interface GuestbookCreateDTO {
   content: string
   nickname?: string
+  avatarUrl?: string
 }

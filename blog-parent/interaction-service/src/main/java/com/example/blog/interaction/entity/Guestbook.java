@@ -9,6 +9,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "guestbook")
@@ -20,10 +21,13 @@ public class Guestbook {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+    private UUID id;
 
     @Column(name = "user_id", nullable = false)
-    private String userId;
+    private UUID userId;
+
+    @Column(name = "avatar_url")
+    private String avatarUrl;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;

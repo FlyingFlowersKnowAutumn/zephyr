@@ -31,7 +31,11 @@ public class ArticleController {
     public Result<ArticleDTO> createArticle(
             @Valid @RequestBody ArticleCreateDTO dto,
             @RequestHeader("X-User-Id") String authorId,
-            @RequestHeader("X-User-Name") String authorName) {
+            @RequestHeader("X-User-Name") String authorName,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        if (!"blogger".equals(role) && !"admin".equals(role)) {
+            return Result.fail(403, "仅博主可发布文章");
+        }
         return Result.success(articleService.createArticle(dto, authorId, authorName));
     }
 
@@ -81,15 +85,19 @@ public class ArticleController {
     public Result<ArticleDTO> updateArticle(
             @PathVariable String id,
             @Valid @RequestBody ArticleUpdateDTO dto,
-            @RequestHeader("X-User-Id") String authorId) {
-        return Result.success(articleService.updateArticle(id, dto, authorId));
+            @RequestHeader("X-User-Id") String authorId,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        boolean isAdmin = "blogger".equals(role) || "admin".equals(role);
+        return Result.success(articleService.updateArticle(id, dto, authorId, isAdmin));
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> deleteArticle(
             @PathVariable String id,
-            @RequestHeader("X-User-Id") String authorId) {
-        articleService.deleteArticle(id, authorId);
+            @RequestHeader("X-User-Id") String authorId,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        boolean isAdmin = "blogger".equals(role) || "admin".equals(role);
+        articleService.deleteArticle(id, authorId, isAdmin);
         return Result.success(null);
     }
 

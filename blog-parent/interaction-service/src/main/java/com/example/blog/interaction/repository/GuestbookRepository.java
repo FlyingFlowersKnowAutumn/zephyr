@@ -6,9 +6,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-import java.util.List;
+import java.util.UUID;
 
-public interface GuestbookRepository extends JpaRepository<Guestbook, String> {
+public interface GuestbookRepository extends JpaRepository<Guestbook, UUID> {
 
     @Query("SELECT g FROM Guestbook g WHERE g.deletedAt IS NULL AND g.status = 'approved' ORDER BY g.createdAt DESC")
     Page<Guestbook> findAllApproved(Pageable pageable);

@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -20,11 +22,14 @@ public class Reaction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @JdbcTypeCode(SqlTypes.UUID)
     private String id;
 
+    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "user_id", nullable = false)
     private String userId;
 
+    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "article_id", nullable = false)
     private String articleId;
 

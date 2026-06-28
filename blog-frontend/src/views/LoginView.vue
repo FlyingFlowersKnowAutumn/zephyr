@@ -138,29 +138,30 @@ async function getCaptcha() {
   
   isCaptchaDisabled.value = true
   captchaBtnText.value = '60s'
-  
-  try {
-    const type = isLoginMode.value && !isPasswordlessMode.value ? 'FORGOT_PASSWORD' : 'REGISTER'
-    await authApi.sendCode({ email: targetEmail, type })
-    ElMessage.success('验证码发送成功')
-  } catch (error: any) {
-    ElMessage.error(error.message || '验证码发送失败')
-    isCaptchaDisabled.value = false
-    captchaBtnText.value = '验证码'
-    return
-  }
-  
+
+  // 倒计时先启动，不等 API 返回
   let count = 60
   const timer = setInterval(() => {
     count--
     captchaBtnText.value = `${count}s`
-    
+
     if (count <= 0) {
       clearInterval(timer)
       isCaptchaDisabled.value = false
       captchaBtnText.value = '验证码'
     }
   }, 1000)
+
+  try {
+    const type = isLoginMode.value && !isPasswordlessMode.value ? 'FORGOT_PASSWORD' : 'REGISTER'
+    await authApi.sendCode({ email: targetEmail, type })
+    ElMessage.success('验证码发送成功')
+  } catch (error: any) {
+    clearInterval(timer)
+    isCaptchaDisabled.value = false
+    captchaBtnText.value = '验证码'
+    ElMessage.error(error.response?.data?.message || '验证码发送失败')
+  }
 }
 
 async function getResetCaptcha() {
@@ -168,31 +169,32 @@ async function getResetCaptcha() {
     ElMessage.warning('请先填写邮箱')
     return
   }
-  
+
   isResetCaptchaDisabled.value = true
   resetCaptchaBtnText.value = '60s'
-  
-  try {
-    await authApi.sendCode({ email: resetEmail.value, type: 'FORGOT_PASSWORD' })
-    ElMessage.success('验证码发送成功')
-  } catch (error: any) {
-    ElMessage.error(error.message || '验证码发送失败')
-    isResetCaptchaDisabled.value = false
-    resetCaptchaBtnText.value = '验证码'
-    return
-  }
-  
+
+  // 倒计时先启动，不等 API 返回
   let count = 60
   const timer = setInterval(() => {
     count--
     resetCaptchaBtnText.value = `${count}s`
-    
+
     if (count <= 0) {
       clearInterval(timer)
       isResetCaptchaDisabled.value = false
       resetCaptchaBtnText.value = '验证码'
     }
   }, 1000)
+
+  try {
+    await authApi.sendCode({ email: resetEmail.value, type: 'FORGOT_PASSWORD' })
+    ElMessage.success('验证码发送成功')
+  } catch (error: any) {
+    clearInterval(timer)
+    isResetCaptchaDisabled.value = false
+    resetCaptchaBtnText.value = '验证码'
+    ElMessage.error(error.response?.data?.message || '验证码发送失败')
+  }
 }
 
 function toggleMode() {

@@ -57,28 +57,29 @@ async function getCaptcha() {
   
   isCaptchaDisabled.value = true
   captchaBtnText.value = '60s'
-  
-  try {
-    await authApi.sendCode({ email: email.value, type: 'REGISTER' })
-    ElMessage.success('验证码发送成功')
-  } catch (error: any) {
-    ElMessage.error(error.message || '验证码发送失败')
-    isCaptchaDisabled.value = false
-    captchaBtnText.value = '验证码'
-    return
-  }
-  
+
+  // 倒计时先启动，不等 API 返回
   let count = 60
   const timer = setInterval(() => {
     count--
     captchaBtnText.value = `${count}s`
-    
+
     if (count <= 0) {
       clearInterval(timer)
       isCaptchaDisabled.value = false
       captchaBtnText.value = '验证码'
     }
   }, 1000)
+
+  try {
+    await authApi.sendCode({ email: email.value, type: 'REGISTER' })
+    ElMessage.success('验证码发送成功')
+  } catch (error: any) {
+    clearInterval(timer)
+    isCaptchaDisabled.value = false
+    captchaBtnText.value = '验证码'
+    ElMessage.error(error.response?.data?.message || '验证码发送失败')
+  }
 }
 
 function initMeteors() {

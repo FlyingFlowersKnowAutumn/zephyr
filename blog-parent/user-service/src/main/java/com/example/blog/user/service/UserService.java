@@ -42,11 +42,15 @@ public class UserService {
             throw BusinessException.conflict("邮箱已被注册");
         }
 
+        String role = "owner@example.com".equals(dto.getEmail())
+                ? RoleEnum.BLOGGER.getValue()
+                : RoleEnum.USER.getValue();
+
         User user = User.builder()
                 .username(dto.getUsername())
                 .email(dto.getEmail())
                 .passwordHash(passwordEncoder.encode(dto.getPassword()))
-                .role(RoleEnum.BLOGGER.getValue())
+                .role(role)
                 .displayName(dto.getUsername())
                 .build();
 

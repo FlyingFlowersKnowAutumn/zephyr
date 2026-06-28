@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useArticleStore } from '@/stores/article'
+import { useAuthStore } from '@/stores/auth'
 import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import ArticleCard from '@/components/common/ArticleCard.vue'
@@ -8,6 +9,7 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const articleStore = useArticleStore()
+const authStore = useAuthStore()
 const tags = ref<string[]>([])
 const articles = ref<any[]>([])
 const selectedTag = ref('')
@@ -73,14 +75,14 @@ onMounted(async () => {
 
       <div v-else-if="tags.length === 0" class="empty-state">
         <p>还没有标签</p>
-        <button @click="showCreateModal = true" class="create-btn">创建标签</button>
+        <button v-if="authStore.user?.role === 'blogger'" @click="showCreateModal = true" class="create-btn">创建标签</button>
       </div>
 
       <div v-else class="tag-wrapper">
         <div class="tag-cloud-section">
           <div class="section-header">
             <h3 class="section-title">所有标签</h3>
-            <button @click="showCreateModal = true" class="create-btn">
+            <button v-if="authStore.user?.role === 'blogger'" @click="showCreateModal = true" class="create-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 4v16m8-8H4"/>
               </svg>

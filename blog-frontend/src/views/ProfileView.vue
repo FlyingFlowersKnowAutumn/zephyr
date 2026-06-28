@@ -167,11 +167,11 @@ async function saveProfile() {
     })
     if (result.code === 0 && result.data) {
       profile.value = result.data
-      authStore.updateUser({
-        displayName: form.value.displayName,
-        avatarUrl: form.value.avatarUrl,
-        bio: form.value.bio
-      })
+      const updated: { displayName?: string; avatarUrl?: string; bio?: string } = {}
+      if (result.data.displayName) updated.displayName = result.data.displayName
+      if (result.data.avatarUrl) updated.avatarUrl = result.data.avatarUrl
+      if (result.data.bio !== undefined) updated.bio = result.data.bio
+      authStore.updateUser(updated)
       ElMessage.success('保存成功')
     } else {
       error.value = result.message || '保存失败'

@@ -15,6 +15,7 @@ public class GuestbookDTO {
     private String id;
     private String userId;
     private String userName;
+    private String avatarUrl;
     private String content;
     private String status;
     private LocalDateTime createdAt;

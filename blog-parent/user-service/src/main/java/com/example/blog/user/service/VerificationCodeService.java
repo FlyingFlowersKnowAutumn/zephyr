@@ -31,8 +31,8 @@ public class VerificationCodeService {
             return false;
         }
 
-        String dailyCount = (String) redisTemplate.opsForValue().get(key + ":daily");
-        int count = dailyCount != null ? Integer.parseInt(dailyCount) : 0;
+        Object dailyCountObj = redisTemplate.opsForValue().get(key + ":daily");
+        int count = dailyCountObj != null ? Integer.parseInt(dailyCountObj.toString()) : 0;
         if (count >= DAILY_LIMIT) {
             log.warn("Daily verification code limit exceeded for: {}", email);
             return false;
@@ -51,8 +51,9 @@ public class VerificationCodeService {
     }
 
     public boolean verifyCode(String email, String code) {
-        String storedCode = (String) redisTemplate.opsForValue().get(CODE_PREFIX + email);
-        return storedCode != null && storedCode.equals(code);
+        Object stored = redisTemplate.opsForValue().get(CODE_PREFIX + email);
+        if (stored == null) return false;
+        return stored.toString().equals(code);
     }
 
     public void deleteCode(String email) {

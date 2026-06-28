@@ -2,6 +2,7 @@
 import { onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
+import { useAuthStore } from '@/stores/auth'
 import { getArticle } from '@/api/article'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import LikeButton from '@/components/interaction/LikeButton.vue'
@@ -13,6 +14,7 @@ const emit = defineEmits(['open-search'])
 const router = useRouter()
 const route = useRoute()
 const articleStore = useArticleStore()
+const authStore = useAuthStore()
 
 const slugParam = computed(() => route.params.slug as string)
 const article = computed(() => articleStore.currentArticle)
@@ -72,9 +74,9 @@ function formatDate(dateString: string) {
     <div class="article-detail-container">
       <header class="detail-header">
         <button class="back-btn" @click="goBack">← 返回</button>
-        <button 
-          v-if="article?.authorId" 
-          class="edit-btn" 
+        <button
+          v-if="article?.authorId && authStore.user?.role === 'blogger'"
+          class="edit-btn"
           @click="handleEdit"
         >
           编辑文章

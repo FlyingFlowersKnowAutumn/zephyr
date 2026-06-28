@@ -104,11 +104,11 @@ public class ArticleService {
     }
 
     @Transactional
-    public ArticleDTO updateArticle(String id, ArticleUpdateDTO dto, String authorId) {
+    public ArticleDTO updateArticle(String id, ArticleUpdateDTO dto, String authorId, boolean isAdmin) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> BusinessException.notFound("文章不存在"));
 
-        if (!article.getAuthorId().equals(authorId)) {
+        if (!isAdmin && !article.getAuthorId().equals(authorId)) {
             throw BusinessException.forbidden("无权修改此文章");
         }
 
@@ -147,11 +147,11 @@ public class ArticleService {
     }
 
     @Transactional
-    public void deleteArticle(String id, String authorId) {
+    public void deleteArticle(String id, String authorId, boolean isAdmin) {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> BusinessException.notFound("文章不存在"));
 
-        if (!article.getAuthorId().equals(authorId)) {
+        if (!isAdmin && !article.getAuthorId().equals(authorId)) {
             throw BusinessException.forbidden("无权删除此文章");
         }
 

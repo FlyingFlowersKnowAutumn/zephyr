@@ -27,7 +27,8 @@ const router = createRouter({
     {
       path: '/write',
       name: 'Write',
-      component: () => import('@/views/WriteView.vue')
+      component: () => import('@/views/WriteView.vue'),
+      meta: { requiresAuth: true, requiredRole: 'blogger' }
     },
     {
       path: '/articles',
@@ -45,7 +46,7 @@ const router = createRouter({
       path: '/articles/:slug/edit',
       name: 'ArticleEdit',
       component: () => import('@/views/WriteView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, requiredRole: 'blogger' }
     },
     {
       path: '/search',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useArticleStore } from '@/stores/article'
+import { useAuthStore } from '@/stores/auth'
 import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import ArticleCard from '@/components/common/ArticleCard.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
@@ -9,6 +10,7 @@ import { RouterLink } from 'vue-router'
 const emit = defineEmits(['open-search'])
 
 const articleStore = useArticleStore()
+const authStore = useAuthStore()
 const articles = ref<any[]>([])
 const loading = ref(true)
 
@@ -20,7 +22,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LayoutWrapper heroTitle="微风日志" heroSubtitle="La brise écrit mes pensées" :showSidebar="true" @open-search="emit('open-search')">
+  <LayoutWrapper heroTitle="微风" heroSubtitle="La brise écrit mes pensées" :showSidebar="true" @open-search="emit('open-search')">
     <SeoHead />
 
     <section class="home-content">
@@ -31,8 +33,11 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="articles.length === 0" class="empty-state">
-        <p>还没有文章，快去写第一篇吧</p>
-        <RouterLink to="/write" class="write-btn">开始写作</RouterLink>
+        <template v-if="authStore.user?.role === 'blogger'">
+          <p>还没有文章，快去写第一篇吧</p>
+          <RouterLink to="/write" class="write-btn">开始写作</RouterLink>
+        </template>
+        <p v-else>还没有文章，敬请期待</p>
       </div>
 
       <div v-else class="articles-list">

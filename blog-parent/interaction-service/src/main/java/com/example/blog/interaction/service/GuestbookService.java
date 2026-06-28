@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -30,8 +31,9 @@ public class GuestbookService {
         String filteredContent = sensitiveWordFilter.filter(dto.getContent());
 
         Guestbook guestbook = Guestbook.builder()
-                .userId(userId)
+                .userId(UUID.fromString(userId))
                 .content(filteredContent)
+                .avatarUrl(dto.getAvatarUrl())
                 .build();
 
         Guestbook saved = guestbookRepository.save(guestbook);
@@ -50,10 +52,10 @@ public class GuestbookService {
 
     @Transactional
     public void deleteGuestbook(String id, String userId, boolean isAdmin) {
-        Guestbook guestbook = guestbookRepository.findById(id)
+        Guestbook guestbook = guestbookRepository.findById(UUID.fromString(id))
                 .orElseThrow(() -> BusinessException.notFound("留言不存在"));
 
-        if (!isAdmin && !guestbook.getUserId().equals(userId)) {
+        if (!isAdmin && !guestbook.getUserId().toString().equals(userId)) {
             throw BusinessException.forbidden("无权删除此留言");
         }
 
@@ -64,9 +66,10 @@ public class GuestbookService {
 
     private GuestbookDTO convertToDTO(Guestbook guestbook, String userName) {
         return GuestbookDTO.builder()
-                .id(guestbook.getId())
-                .userId(guestbook.getUserId())
+                .id(guestbook.getId().toString())
+                .userId(guestbook.getUserId().toString())
                 .userName(userName)
+                .avatarUrl(guestbook.getAvatarUrl())
                 .content(guestbook.getContent())
                 .status(guestbook.getStatus())
                 .createdAt(guestbook.getCreatedAt())
