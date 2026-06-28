@@ -6,14 +6,32 @@ import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import ArticleCard from '@/components/common/ArticleCard.vue'
 import { useRoute } from 'vue-router'
+import type { TagDTO } from '@/types'
 
 const route = useRoute()
 const articleStore = useArticleStore()
 const authStore = useAuthStore()
-const tags = ref<string[]>([])
+const tags = ref<TagDTO[]>([])
 const articles = ref<any[]>([])
 const selectedTag = ref('')
 const loading = ref(true)
+const hoveredTag = ref('')
+const isBlogger = computed(() => authStore.user?.role === 'blogger')
+
+const tagColors: Record<string, string> = {}
+const colorPalette = [
+  '#8B9A6B', '#A67C52', '#4A5568', '#38A169', '#38B2AC', '#9F7AEA', '#63B3ED', 
+  '#ED8936', '#E53E3E', '#DD6B20', '#D69E2E', '#48BB78', '#319795', '#805AD5', 
+  '#553C9A', '#B794F4', '#ED64A6', '#F687B3', '#718096', '#2D3748'
+]
+
+function getTagColor(tagName: string): string {
+  if (!tagColors[tagName]) {
+    const index = tagName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colorPalette.length
+    tagColors[tagName] = colorPalette[index]
+  }
+  return tagColors[tagName]
+}
 
 const showCreateModal = ref(false)
 const newTagName = ref('')
@@ -27,36 +45,44 @@ async function createTag() {
   showCreateModal.value = false
 }
 
+async function deleteTag(id: string) {
+  if (!confirm('确定要删除这个标签吗？')) return
+  
+  await articleStore.deleteTag(id)
+  tags.value = await articleStore.fetchTags()
+  if (selectedTag.value === tags.value.find(t => t.id === id)?.name) {
+    selectedTag.value = ''
+  }
+}
+
 const filteredArticles = computed(() => {
   if (!selectedTag.value) return []
   return articles.value.filter(article => article.tags?.includes(selectedTag.value))
 })
 
-const tagArticleCount = computed(() => {
-  const counts: Record<string, number> = {}
-  articles.value.forEach(article => {
-    article.tags?.forEach((tag: string) => {
-      counts[tag] = (counts[tag] || 0) + 1
-    })
-  })
-  return counts
-})
-
 const sortedTags = computed(() => {
-  return [...tags.value].sort((a, b) => (tagArticleCount.value[b] || 0) - (tagArticleCount.value[a] || 0))
+  return [...tags.value].sort((a, b) => (b.articleCount || 0) - (a.articleCount || 0))
 })
 
 onMounted(async () => {
-  const [tagResult, articleResult] = await Promise.all([
-    articleStore.fetchTags(),
-    articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
-  ])
-  tags.value = tagResult
-  articles.value = articleResult.articles
+  try {
+    const [tagResult, articleResult] = await Promise.all([
+      articleStore.fetchTags(),
+      articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
+    ])
+    // 兼容新旧格式
+    const tagData = tagResult as any
+    tags.value = typeof tagData[0] === 'string'
+      ? tagData.map((name: string) => ({ id: name, name, articleCount: 0, createdAt: '' }))
+      : tagData
+    articles.value = articleResult.articles
   
-  const tagFromUrl = route.query.tag as string
-  if (tagFromUrl && tags.value.includes(tagFromUrl)) {
-    selectedTag.value = tagFromUrl
+    const tagFromUrl = route.query.tag as string
+    if (tagFromUrl && tags.value.some(t => t.name === tagFromUrl)) {
+      selectedTag.value = tagFromUrl
+    }
+  } catch (e) {
+    console.error('Failed to load tags:', e)
   }
   
   loading.value = false
@@ -73,33 +99,49 @@ onMounted(async () => {
         <p>加载中...</p>
       </div>
 
-      <div v-else-if="tags.length === 0" class="empty-state">
-        <p>还没有标签</p>
-        <button v-if="authStore.user?.role === 'blogger'" @click="showCreateModal = true" class="create-btn">创建标签</button>
-      </div>
-
       <div v-else class="tag-wrapper">
         <div class="tag-cloud-section">
           <div class="section-header">
             <h3 class="section-title">所有标签</h3>
-            <button v-if="authStore.user?.role === 'blogger'" @click="showCreateModal = true" class="create-btn">
+            <button v-if="isBlogger" @click="showCreateModal = true" class="create-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 4v16m8-8H4"/>
               </svg>
               <span>新建</span>
             </button>
           </div>
-          <div class="tag-cloud">
-            <button 
+          <div v-if="tags.length === 0" class="tag-empty">
+            还没有标签
+          </div>
+          <div v-else class="tag-cloud" @mouseleave="hoveredTag = ''">
+            <div 
               v-for="tag in sortedTags" 
-              :key="tag"
-              @click="selectedTag = selectedTag === tag ? '' : tag"
-              class="tag"
-              :class="{ active: selectedTag === tag }"
+              :key="tag.id"
+              class="tag-wrapper-item"
+              :class="{ 'tag-cloud-hover': hoveredTag !== '' && hoveredTag !== tag.name }"
             >
-              <span class="tag-name">{{ tag }}</span>
-              <span class="tag-count">{{ tagArticleCount[tag] || 0 }}</span>
-            </button>
+              <button 
+                @click="selectedTag = selectedTag === tag.name ? '' : tag.name"
+                @mouseenter="hoveredTag = tag.name"
+                class="tag"
+                :class="{ active: selectedTag === tag.name }"
+                :style="{ '--tag-color': getTagColor(tag.name) }"
+              >
+                <span class="tag-name">{{ tag.name }}</span>
+                <span class="tag-count">{{ tag.articleCount || 0 }}</span>
+                <button 
+                  v-if="isBlogger" 
+                  @click.stop="deleteTag(tag.id)" 
+                  class="delete-btn"
+                  title="删除标签"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -191,6 +233,11 @@ onMounted(async () => {
   &:hover {
     opacity: 0.9;
   }
+
+  svg {
+    width: 0;
+    height: 0;
+  }
 }
 
 .loading {
@@ -231,24 +278,6 @@ onMounted(async () => {
     color: var(--color-text-secondary);
     font-size: 1.1rem;
   }
-
-  .create-btn {
-    display: inline-block;
-    padding: 0.75rem 2rem;
-    background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
-    }
-  }
 }
 
 .tag-wrapper {
@@ -274,31 +303,76 @@ onMounted(async () => {
 .tag-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.4rem;
+}
+
+.tag-empty {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+.tag-wrapper-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  transition: opacity 0.3s ease;
+
+  &.tag-cloud-hover {
+    opacity: 0.4;
+  }
+}
+
+.delete-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+
+  .tag:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: #ef4444;
+  }
 }
 
 .tag {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.8rem;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
+  padding: 0.35rem 0.8rem;
+  background: var(--tag-color);
+  border-radius: 6px;
   font-size: 0.85rem;
-  color: var(--color-text-secondary);
+  color: white;
   cursor: pointer;
-  transition: all var(--transition-default);
+  transition: all 0.3s ease;
+  border: none;
 
   &:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    transform: scale(1.05);
+    background: #ED8936;
+    color: white;
   }
 
   &.active {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: white;
+    background: #ED8936;
+    transform: scale(1.05);
   }
 }
 

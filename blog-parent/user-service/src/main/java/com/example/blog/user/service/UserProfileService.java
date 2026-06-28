@@ -1,5 +1,7 @@
 package com.example.blog.user.service;
 
+import com.example.blog.common.dto.AnnouncementDTO;
+import com.example.blog.common.dto.UpdateAnnouncementDTO;
 import com.example.blog.common.dto.UpdateUserProfileDTO;
 import com.example.blog.common.dto.UserProfileDTO;
 import com.example.blog.common.exception.BusinessException;
@@ -67,6 +69,37 @@ public class UserProfileService {
                 .github(profile != null ? profile.getGithub() : null)
                 .twitter(profile != null ? profile.getTwitter() : null)
                 .about(profile != null ? profile.getAbout() : null)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public AnnouncementDTO getAnnouncement(UUID userId) {
+        UserProfile profile = userProfileRepository.findById(userId).orElse(null);
+        if (profile != null && profile.getAnnouncementTitle() != null && profile.getAnnouncementContent() != null) {
+            return AnnouncementDTO.builder()
+                    .title(profile.getAnnouncementTitle())
+                    .content(profile.getAnnouncementContent())
+                    .build();
+        }
+        return AnnouncementDTO.builder()
+                .title("公告")
+                .content("即使再小的帆也能远航⛵")
+                .build();
+    }
+
+    @Transactional
+    public AnnouncementDTO updateAnnouncement(UUID userId, UpdateAnnouncementDTO dto) {
+        UserProfile profile = userProfileRepository.findById(userId)
+                .orElseGet(() -> UserProfile.builder().userId(userId).build());
+
+        if (dto.getTitle() != null) profile.setAnnouncementTitle(dto.getTitle());
+        if (dto.getContent() != null) profile.setAnnouncementContent(dto.getContent());
+        userProfileRepository.save(profile);
+
+        log.info("Announcement updated: userId={}", userId);
+        return AnnouncementDTO.builder()
+                .title(profile.getAnnouncementTitle())
+                .content(profile.getAnnouncementContent())
                 .build();
     }
 }

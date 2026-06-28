@@ -241,8 +241,8 @@ function goBack() {
             <label>分类</label>
             <select v-model="selectedCategory" class="category-select">
               <option value="">请选择分类</option>
-              <option v-for="cat in articleStore.categories" :key="cat" :value="cat">
-                {{ cat }}
+              <option v-for="cat in articleStore.categories" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
               </option>
             </select>
           </div>

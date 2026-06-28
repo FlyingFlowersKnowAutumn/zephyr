@@ -33,6 +33,12 @@ public class UserProfile {
     @Column(columnDefinition = "TEXT")
     private String about;
 
+    @Column(name = "announcement_title", length = 200)
+    private String announcementTitle;
+
+    @Column(name = "announcement_content", columnDefinition = "TEXT")
+    private String announcementContent;
+
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

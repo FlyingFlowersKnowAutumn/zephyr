@@ -175,6 +175,16 @@ export interface UpdateAboutDTO {
   socialLinks?: string
 }
 
+export interface AnnouncementDTO {
+  title: string
+  content: string
+}
+
+export interface UpdateAnnouncementDTO {
+  title?: string
+  content?: string
+}
+
 export interface GuestbookDTO {
   id: string
   userId: string

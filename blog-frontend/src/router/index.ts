@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { incrementViewCount } from '@/api/site'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -111,6 +112,15 @@ router.beforeEach((to, _from, next) => {
   }
   
   next()
+})
+
+router.afterEach((to, from) => {
+  console.log('路由变化:', from.path, '->', to.path)
+  incrementViewCount()
+    .then(() => console.log('浏览量+1成功'))
+    .catch((err) => {
+      console.error('浏览量+1失败:', err)
+    })
 })
 
 export default router

@@ -2,7 +2,12 @@ package com.example.blog.article.service;
 
 import com.example.blog.article.entity.Article;
 import com.example.blog.article.entity.Article.ArticleStatus;
+import com.example.blog.article.entity.ArticleTagMap;
+import com.example.blog.article.entity.Tag;
 import com.example.blog.article.repository.ArticleRepository;
+import com.example.blog.article.repository.ArticleTagMapRepository;
+import com.example.blog.article.service.CategoryService;
+import com.example.blog.article.service.TagService;
 import com.example.blog.common.dto.ArticleCreateDTO;
 import com.example.blog.common.dto.ArticleDTO;
 import com.example.blog.common.dto.ArticleStatsUpdateDTO;
@@ -30,6 +35,9 @@ import java.util.stream.Collectors;
 public class ArticleService {
 
     private final ArticleRepository articleRepository;
+    private final ArticleTagMapRepository articleTagMapRepository;
+    private final CategoryService categoryService;
+    private final TagService tagService;
 
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9-]");
     private static final Pattern MULTIPLE_HYPHENS = Pattern.compile("-+");
@@ -42,6 +50,13 @@ public class ArticleService {
 
         String slug = ensureUniqueSlug(dto.getSlug(), dto.getTitle());
 
+        String categoryName = null;
+        if (dto.getCategoryId() != null && !dto.getCategoryId().isBlank()) {
+            var category = categoryService.getCategoryById(dto.getCategoryId());
+            categoryName = category.getName();
+            categoryService.incrementArticleCount(dto.getCategoryId());
+        }
+
         Article article = Article.builder()
                 .title(dto.getTitle())
                 .content(dto.getContent())
@@ -52,10 +67,29 @@ public class ArticleService {
                 .authorId(authorId)
                 .authorName(authorName)
                 .categoryId(dto.getCategoryId())
+                .categoryName(categoryName)
                 .tags(dto.getTags() != null ? dto.getTags() : List.of())
                 .build();
 
         Article saved = articleRepository.save(article);
+
+        if (dto.getTags() != null && !dto.getTags().isEmpty()) {
+            for (String tagName : dto.getTags()) {
+                Tag tag = null;
+                try {
+                    tag = tagService.getTagByName(tagName);
+                } catch (BusinessException e) {
+                    tag = tagService.createTag(tagName);
+                }
+                ArticleTagMap map = ArticleTagMap.builder()
+                        .articleId(saved.getId())
+                        .tagId(tag.getId())
+                        .build();
+                articleTagMapRepository.save(map);
+                tagService.incrementArticleCount(tag.getId());
+            }
+        }
+
         log.info("Article created: id={}, slug={}, title={}, author={}", saved.getId(), saved.getSlug(), saved.getTitle(), authorName);
         return convertToDTO(saved);
     }

@@ -1,6 +1,8 @@
 package com.example.blog.user.controller;
 
 import com.example.blog.common.Result;
+import com.example.blog.common.dto.AnnouncementDTO;
+import com.example.blog.common.dto.UpdateAnnouncementDTO;
 import com.example.blog.common.dto.UpdateUserProfileDTO;
 import com.example.blog.common.dto.UserProfileDTO;
 import com.example.blog.common.exception.BusinessException;
@@ -50,5 +52,22 @@ public class UserProfileController {
             throw BusinessException.unauthorized("无效的token");
         }
         return jwtService.getUserId(claims);
+    }
+
+    @GetMapping("/{userId}/announcement")
+    public Result<AnnouncementDTO> getAnnouncement(@PathVariable UUID userId) {
+        return Result.success(userProfileService.getAnnouncement(userId));
+    }
+
+    @PutMapping("/{userId}/announcement")
+    public Result<AnnouncementDTO> updateAnnouncement(
+            @PathVariable UUID userId,
+            @RequestBody UpdateAnnouncementDTO dto,
+            @RequestHeader("Authorization") String authorization) {
+        UUID callerId = extractUserId(authorization);
+        if (!callerId.equals(userId)) {
+            throw BusinessException.forbidden("无权操作");
+        }
+        return Result.success(userProfileService.updateAnnouncement(userId, dto));
     }
 }

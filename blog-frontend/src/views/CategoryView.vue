@@ -6,14 +6,16 @@ import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import ArticleCard from '@/components/common/ArticleCard.vue'
 import { useRoute } from 'vue-router'
+import type { CategoryDTO } from '@/types'
 
 const showCreateModal = ref(false)
 const newCategoryName = ref('')
+const isBlogger = computed(() => authStore.user?.role === 'blogger')
 
 const route = useRoute()
 const articleStore = useArticleStore()
 const authStore = useAuthStore()
-const categories = ref<string[]>([])
+const categories = ref<CategoryDTO[]>([])
 const articles = ref<any[]>([])
 const selectedCategory = ref('')
 const loading = ref(true)
@@ -21,15 +23,6 @@ const loading = ref(true)
 const filteredArticles = computed(() => {
   if (!selectedCategory.value) return articles.value
   return articles.value.filter(article => article.categoryName === selectedCategory.value)
-})
-
-const categoryArticleCount = computed(() => {
-  const counts: Record<string, number> = {}
-  articles.value.forEach(article => {
-    const category = article.categoryName || '未分类'
-    counts[category] = (counts[category] || 0) + 1
-  })
-  return counts
 })
 
 async function createCategory() {
@@ -41,17 +34,34 @@ async function createCategory() {
   showCreateModal.value = false
 }
 
-onMounted(async () => {
-  const [catResult, articleResult] = await Promise.all([
-    articleStore.fetchCategories(),
-    articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
-  ])
-  categories.value = catResult
-  articles.value = articleResult.articles
+async function deleteCategory(id: string) {
+  if (!confirm('确定要删除这个分类吗？')) return
   
-  const categoryFromUrl = route.query.category as string
-  if (categoryFromUrl && categories.value.includes(categoryFromUrl)) {
-    selectedCategory.value = categoryFromUrl
+  await articleStore.deleteCategory(id)
+  categories.value = await articleStore.fetchCategories()
+  if (selectedCategory.value === categories.value.find(c => c.id === id)?.name) {
+    selectedCategory.value = ''
+  }
+}
+
+onMounted(async () => {
+  try {
+    const [catResult, articleResult] = await Promise.all([
+      articleStore.fetchCategories(),
+      articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
+    ])
+    const catData = catResult as any
+    categories.value = typeof catData[0] === 'string'
+      ? catData.map((name: string) => ({ id: name, name, description: '', articleCount: 0, createdAt: '' }))
+      : catData
+    articles.value = articleResult.articles
+  
+    const categoryFromUrl = route.query.category as string
+    if (categoryFromUrl && categories.value.some(c => c.name === categoryFromUrl)) {
+      selectedCategory.value = categoryFromUrl
+    }
+  } catch (e) {
+    console.error('Failed to load categories:', e)
   }
   
   loading.value = false
@@ -68,16 +78,11 @@ onMounted(async () => {
         <p>加载中...</p>
       </div>
 
-      <div v-else-if="categories.length === 0" class="empty-state">
-        <p>还没有分类</p>
-        <button v-if="authStore.user?.role === 'blogger'" @click="showCreateModal = true" class="create-btn">新建分类</button>
-      </div>
-
       <div v-else class="category-container">
         <div class="category-sidebar">
           <div class="sidebar-header">
             <span class="sidebar-title">分类</span>
-            <button v-if="authStore.user?.role === 'blogger'" @click="showCreateModal = true" class="create-btn">
+            <button v-if="isBlogger" @click="showCreateModal = true" class="create-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 4v16m8-8H4"/>
               </svg>
@@ -93,16 +98,34 @@ onMounted(async () => {
             <span class="category-name">全部文章</span>
             <span class="category-count">{{ articles.length }}</span>
           </div>
+          <div v-if="categories.length === 0" class="category-empty">
+            还没有分类
+          </div>
           <div 
             v-for="category in categories" 
-            :key="category"
-            @click="selectedCategory = category"
-            class="category-item"
-            :class="{ active: selectedCategory === category }"
+            :key="category.id"
+            class="category-item-wrapper"
           >
-            <span class="category-dot"></span>
-            <span class="category-name">{{ category }}</span>
-            <span class="category-count">{{ categoryArticleCount[category] || 0 }}</span>
+            <div 
+              @click="selectedCategory = category.name"
+              class="category-item"
+              :class="{ active: selectedCategory === category.name }"
+            >
+              <span class="category-dot"></span>
+              <span class="category-name">{{ category.name }}</span>
+              <span class="category-count">{{ category.articleCount || 0 }}</span>
+            </div>
+            <button 
+              v-if="isBlogger" 
+              @click.stop="deleteCategory(category.id)" 
+              class="delete-btn"
+              title="删除分类"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -195,6 +218,52 @@ onMounted(async () => {
   &:hover {
     opacity: 0.9;
   }
+
+  span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  svg {
+    width: 0;
+    height: 0;
+  }
+}
+
+.category-item-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all var(--transition-default);
+
+  .category-item-wrapper:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+}
+
+.category-empty {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
 }
 
 .loading {
@@ -234,24 +303,6 @@ onMounted(async () => {
     margin-bottom: 1.5rem;
     color: var(--color-text-secondary);
     font-size: 1.1rem;
-  }
-
-  .create-btn {
-    display: inline-block;
-    padding: 0.75rem 2rem;
-    background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
-    }
   }
 }
 

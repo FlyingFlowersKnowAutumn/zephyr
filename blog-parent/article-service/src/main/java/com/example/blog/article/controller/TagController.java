@@ -1,12 +1,11 @@
 package com.example.blog.article.controller;
 
-import com.example.blog.article.service.ArticleService;
+import com.example.blog.article.entity.Tag;
+import com.example.blog.article.service.TagService;
 import com.example.blog.common.Result;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
@@ -17,15 +16,33 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TagController {
 
-    private final ArticleService articleService;
+    private final TagService tagService;
 
     @GetMapping
-    public Result<List<String>> getAllTags() {
-        return Result.success(articleService.getAllTags());
+    public Result<List<Tag>> getAllTags() {
+        return Result.success(tagService.getAllTags());
     }
 
-    @GetMapping("/count")
-    public Result<List<Map<String, Object>>> getTagsWithCount() {
-        return Result.success(articleService.getAllTagsWithCount());
+    @GetMapping("/{id}")
+    public Result<Tag> getTagById(@PathVariable String id) {
+        return Result.success(tagService.getTagById(id));
+    }
+
+    @PostMapping
+    public Result<Tag> createTag(@RequestBody Map<String, String> body) {
+        String name = body.get("name");
+        return Result.success(tagService.createTag(name));
+    }
+
+    @PutMapping("/{id}")
+    public Result<Tag> updateTag(@PathVariable String id, @RequestBody Map<String, String> body) {
+        String name = body.get("name");
+        return Result.success(tagService.updateTag(id, name));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteTag(@PathVariable String id) {
+        tagService.deleteTag(id);
+        return Result.success(null);
     }
 }

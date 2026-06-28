@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { ArticleDTO, CreateArticleDTO, UpdateArticleDTO } from '@/types'
+import type { ArticleDTO, CreateArticleDTO, UpdateArticleDTO, CategoryDTO, TagDTO, Result } from '@/types'
 import * as articleApi from '@/api/article'
 
 export const useArticleStore = defineStore('article', () => {
   const articles = ref<ArticleDTO[]>([])
   const currentArticle = ref<ArticleDTO | null>(null)
-  const categories = ref<string[]>([])
-  const tags = ref<string[]>([])
+  const categories = ref<CategoryDTO[]>([])
+  const tags = ref<TagDTO[]>([])
   const loading = ref(false)
   const error = ref('')
 
@@ -123,11 +123,17 @@ export const useArticleStore = defineStore('article', () => {
     }
   }
 
-  async function fetchCategories() {
+  async function fetchCategories(): Promise<CategoryDTO[]> {
     try {
       const result = await articleApi.listCategories()
       if (result.code === 0 && result.data) {
-        categories.value = result.data
+        // 兼容新旧格式：string[] 或 CategoryDTO[]
+        const data = result.data as any
+        if (typeof data[0] === 'string') {
+          categories.value = data.map((name: string) => ({ id: name, name, description: '', articleCount: 0, createdAt: '' }))
+        } else {
+          categories.value = data
+        }
       }
     } catch {
       // 非关键数据，静默失败
@@ -135,11 +141,17 @@ export const useArticleStore = defineStore('article', () => {
     return categories.value
   }
 
-  async function fetchTags() {
+  async function fetchTags(): Promise<TagDTO[]> {
     try {
       const result = await articleApi.listTags()
       if (result.code === 0 && result.data) {
-        tags.value = result.data
+        // 兼容新旧格式：string[] 或 TagDTO[]
+        const data = result.data as any
+        if (typeof data[0] === 'string') {
+          tags.value = data.map((name: string) => ({ id: name, name, articleCount: 0, createdAt: '' }))
+        } else {
+          tags.value = data
+        }
       }
     } catch {
       // 非关键数据，静默失败
@@ -147,10 +159,11 @@ export const useArticleStore = defineStore('article', () => {
     return tags.value
   }
 
-  async function createCategory(name: string): Promise<boolean> {
+  async function createCategory(name: string, description?: string): Promise<boolean> {
     try {
-      const result = await articleApi.createCategory(name)
+      const result = await articleApi.createCategory(name, description)
       if (result.code === 0) {
+        await fetchCategories()
         return true
       }
       error.value = result.message || '创建分类失败'
@@ -165,12 +178,73 @@ export const useArticleStore = defineStore('article', () => {
     try {
       const result = await articleApi.createTag(name)
       if (result.code === 0) {
+        await fetchTags()
         return true
       }
       error.value = result.message || '创建标签失败'
       return false
     } catch {
       error.value = '创建标签失败'
+      return false
+    }
+  }
+
+  async function updateCategory(id: string, name: string, description?: string): Promise<boolean> {
+    try {
+      const result = await articleApi.updateCategory(id, name, description)
+      if (result.code === 0) {
+        await fetchCategories()
+        return true
+      }
+      error.value = result.message || '更新分类失败'
+      return false
+    } catch {
+      error.value = '更新分类失败'
+      return false
+    }
+  }
+
+  async function updateTag(id: string, name: string): Promise<boolean> {
+    try {
+      const result = await articleApi.updateTag(id, name)
+      if (result.code === 0) {
+        await fetchTags()
+        return true
+      }
+      error.value = result.message || '更新标签失败'
+      return false
+    } catch {
+      error.value = '更新标签失败'
+      return false
+    }
+  }
+
+  async function deleteCategory(id: string): Promise<boolean> {
+    try {
+      const result = await articleApi.deleteCategory(id)
+      if (result.code === 0) {
+        await fetchCategories()
+        return true
+      }
+      error.value = result.message || '删除分类失败'
+      return false
+    } catch {
+      error.value = '删除分类失败'
+      return false
+    }
+  }
+
+  async function deleteTag(id: string): Promise<boolean> {
+    try {
+      const result = await articleApi.deleteTag(id)
+      if (result.code === 0) {
+        await fetchTags()
+        return true
+      }
+      error.value = result.message || '删除标签失败'
+      return false
+    } catch {
+      error.value = '删除标签失败'
       return false
     }
   }
@@ -195,6 +269,10 @@ export const useArticleStore = defineStore('article', () => {
     fetchTags,
     createCategory,
     createTag,
+    updateCategory,
+    updateTag,
+    deleteCategory,
+    deleteTag,
     clearError
   }
 })
