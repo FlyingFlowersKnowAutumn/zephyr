@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Random;
 import java.util.UUID;
 
 @Slf4j
@@ -109,7 +110,60 @@ public class UserService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
+    public LoginResponseDTO guestLogin(GuestLoginDTO dto) {
+        if (!verificationCodeService.verifyCode(dto.getEmail(), dto.getCode())) {
+            throw BusinessException.badRequest("验证码错误或已过期");
+        }
+
+        User user = userRepository.findByEmail(dto.getEmail())
+                .orElseGet(() -> {
+                    String username = generateUniqueUsername("Vent");
+                    User newUser = User.builder()
+                            .username(username)
+                            .email(dto.getEmail())
+                            .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                            .role(RoleEnum.USER.getValue())
+                            .displayName("Vent")
+                            .avatarUrl("/Note/mm.jpg")
+                            .build();
+                    User saved = userRepository.save(newUser);
+                    log.info("Guest user auto-registered: id={}, username={}", saved.getId(), username);
+                    return saved;
+                });
+
+        if (user.getDeletedAt() != null) {
+            throw BusinessException.unauthorized("账户已被删除");
+        }
+
+        verificationCodeService.deleteCode(dto.getEmail());
+
+        String token = jwtService.generateToken(user.getId(), user.getRole());
+        String refreshToken = jwtService.generateRefreshToken();
+
+        redisTemplate.opsForValue().set(
+                REFRESH_TOKEN_PREFIX + refreshToken,
+                user.getId().toString(),
+                REFRESH_TOKEN_TTL);
+
+        log.info("Guest user logged in: id={}, email={}", user.getId(), user.getEmail());
+
+        return LoginResponseDTO.builder()
+                .token(token)
+                .refreshToken(refreshToken)
+                .user(convertToDTO(user))
+                .build();
+    }
+
+    private String generateUniqueUsername(String base) {
+        String username = base;
+        Random random = new Random();
+        while (userRepository.existsByUsername(username)) {
+            username = base + String.format("%04d", random.nextInt(10000));
+        }
+        return username;
+    }
+
     public UserDTO getUserById(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> BusinessException.notFound("用户不存在"));

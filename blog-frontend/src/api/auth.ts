@@ -1,5 +1,5 @@
 import axios from './index'
-import type { LoginDTO, RegisterDTO, UserDTO, LoginResponseDTO, UpdatePasswordDTO, SendCodeDTO, RefreshTokenDTO } from '@/types'
+import type { LoginDTO, RegisterDTO, UserDTO, LoginResponseDTO, UpdatePasswordDTO, SendCodeDTO, RefreshTokenDTO, GuestLoginDTO } from '@/types'
 
 export async function login(dto: LoginDTO): Promise<Result<LoginResponseDTO>> {
   const response = await axios.post('/v1/auth/login', dto)
@@ -34,6 +34,14 @@ export async function updatePassword(dto: UpdatePasswordDTO): Promise<Result<voi
  * @param dto.email 邮箱地址
  * @param dto.type 验证码类型：REGISTER(注册) / FORGOT_PASSWORD(修改密码)
  */
+/**
+ * 免密登录（邮箱+验证码），未注册自动创建账号
+ */
+export async function guestLogin(dto: GuestLoginDTO): Promise<Result<LoginResponseDTO>> {
+  const response = await axios.post('/v1/auth/guest-login', dto)
+  return response.data
+}
+
 export async function sendCode(dto: SendCodeDTO): Promise<Result<void>> {
   const response = await axios.post('/v1/auth/send-code', dto)
   return response.data

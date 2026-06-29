@@ -63,9 +63,9 @@ async function handlePasswordlessLogin() {
   }
   isLoading.value = true
   try {
-    await authStore.login({
-      username: email.value,
-      password: captcha.value
+    await authStore.guestLogin({
+      email: email.value,
+      code: captcha.value
     })
     ElMessage.success('登录成功')
     router.push('/')

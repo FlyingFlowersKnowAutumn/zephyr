@@ -20,7 +20,7 @@ public class VerificationCodeService {
     private static final String CODE_PREFIX = "code:email:";
     private static final long CODE_EXPIRE = 5 * 60;
     private static final long RATE_LIMIT = 60;
-    private static final int DAILY_LIMIT = 5;
+    private static final int DAILY_LIMIT = 40;
 
     public boolean sendCode(String email, String type) {
         String key = CODE_PREFIX + email;

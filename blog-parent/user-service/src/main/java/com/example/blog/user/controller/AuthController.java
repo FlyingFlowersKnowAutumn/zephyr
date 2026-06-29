@@ -34,6 +34,11 @@ public class AuthController {
         return Result.success(userService.login(dto));
     }
 
+    @PostMapping("/guest-login")
+    public Result<LoginResponseDTO> guestLogin(@Valid @RequestBody GuestLoginDTO dto) {
+        return Result.success(userService.guestLogin(dto));
+    }
+
     @PostMapping("/refresh")
     public Result<LoginResponseDTO> refresh(@RequestBody RefreshTokenDTO dto) {
         throw BusinessException.notFound("暂未实现");

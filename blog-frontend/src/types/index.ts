@@ -200,3 +200,8 @@ export interface GuestbookCreateDTO {
   nickname?: string
   avatarUrl?: string
 }
+
+export interface GuestLoginDTO {
+  email: string
+  code: string
+}

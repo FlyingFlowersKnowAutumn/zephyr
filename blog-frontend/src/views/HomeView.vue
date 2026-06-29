@@ -22,7 +22,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LayoutWrapper heroTitle="微风" heroSubtitle="La brise écrit mes pensées" :showSidebar="true" @open-search="emit('open-search')">
+  <LayoutWrapper heroTitle="微风" heroSubtitle="La brise écrit mes pensées" heroImage="/Note/wallhaven-w5lr6x_2560x1440.png" :showSidebar="true" @open-search="emit('open-search')">
     <SeoHead />
 
     <section class="home-content">
