@@ -35,12 +35,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/auth/password",
             "/api/v1/articles",
             "/api/v1/tags",
-            "/api/v1/about"
+            "/api/v1/about",
+            "/api/v1/site/view"
     );
 
     private static final Set<String> READ_ONLY_WHITELIST = Set.of(
             "/api/v1/articles",
             "/api/v1/tags",
+            "/api/v1/categories",
+            "/api/v1/site",
             "/api/v1/about",
             "/api/v1/rss",
             "/api/v1/sitemap",

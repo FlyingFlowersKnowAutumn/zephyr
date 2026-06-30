@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import type { CreateArticleDTO, UpdateArticleDTO } from '@/types'
+import Header from '@/components/layout/Header.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -10,6 +11,8 @@ const articleStore = useArticleStore()
 
 const isEdit = computed(() => !!route.params.slug)
 const articleId = ref<string | null>(null)
+
+const contentWordCount = computed(() => content.value.length)
 
 const title = ref('')
 const content = ref('')
@@ -22,6 +25,141 @@ const selectedTags = ref<string[]>([])
 const isSubmitting = ref(false)
 const error = ref('')
 
+const outline = ref<{ level: number; text: string; lineIndex: number }[]>([])
+const meteorCanvas = ref<HTMLCanvasElement | null>(null)
+
+interface Meteor {
+  x: number
+  y: number
+  length: number
+  speed: number
+  size: number
+  opacity: number
+  angle: number
+}
+
+let meteors: Meteor[] = []
+let animationId: number | null = null
+
+function initMeteors(width: number, height: number) {
+  meteors = []
+  const count = Math.min(Math.floor(width / 80), 30)
+  
+  for (let i = 0; i < count; i++) {
+    meteors.push(createMeteor(width, height, true))
+  }
+}
+
+function createMeteor(width: number, height: number, randomY = false): Meteor {
+  const depth = Math.random()
+  const size = depth * 1.5 + 0.5
+  const baseSpeed = 0.8
+  const speed = baseSpeed * (depth * 1.5 + 0.3)
+  
+  return {
+    x: Math.random() * width + width * 0.1,
+    y: randomY ? Math.random() * height * 0.8 : -20,
+    length: depth * 120 + 60,
+    speed,
+    size,
+    opacity: depth * 0.6 + 0.2,
+    angle: Math.PI / 4 + (Math.random() - 0.5) * 0.15
+  }
+}
+
+function updateMeteors(width: number, height: number) {
+  meteors.forEach((meteor, index) => {
+    meteor.x -= Math.cos(meteor.angle) * meteor.speed
+    meteor.y += Math.sin(meteor.angle) * meteor.speed
+    
+    if (meteor.x < -100 || meteor.y > height + 100) {
+      meteors[index] = createMeteor(width, height)
+    }
+  })
+}
+
+function drawMeteors(ctx: CanvasRenderingContext2D) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+  
+  meteors.forEach(meteor => {
+    ctx.beginPath()
+    ctx.moveTo(meteor.x, meteor.y)
+    ctx.lineTo(
+      meteor.x + Math.cos(meteor.angle) * meteor.length,
+      meteor.y - Math.sin(meteor.angle) * meteor.length
+    )
+    
+    const gradient = ctx.createLinearGradient(
+      meteor.x, meteor.y,
+      meteor.x + Math.cos(meteor.angle) * meteor.length,
+      meteor.y - Math.sin(meteor.angle) * meteor.length
+    )
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${meteor.opacity})`)
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    
+    ctx.strokeStyle = gradient
+    ctx.lineWidth = meteor.size
+    ctx.lineCap = 'round'
+    ctx.stroke()
+    
+    ctx.beginPath()
+    ctx.arc(meteor.x, meteor.y, meteor.size / 2, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(255, 255, 255, ${meteor.opacity})`
+    ctx.shadowColor = '#fff'
+    ctx.shadowBlur = meteor.size * 2
+    ctx.fill()
+    ctx.shadowBlur = 0
+  })
+}
+
+function animate() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  
+  updateMeteors(canvas.width, canvas.height)
+  drawMeteors(ctx)
+  
+  animationId = requestAnimationFrame(animate)
+}
+
+function resizeCanvas() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  const heroHeight = Math.max(window.innerHeight * 0.333, 250)
+  canvas.width = window.innerWidth
+  canvas.height = heroHeight
+  
+  initMeteors(canvas.width, canvas.height)
+}
+
+function generateOutline() {
+  const lines = content.value.split('\n')
+  const result: { level: number; text: string; lineIndex: number }[] = []
+  
+  lines.forEach((line, index) => {
+    const match = line.match(/^(#{1,3})\s+(.+)$/)
+    if (match) {
+      const level = match[1].length
+      const text = match[2].trim()
+      result.push({
+        level,
+        text,
+        lineIndex: index
+      })
+    }
+  })
+  
+  outline.value = result
+}
+
+watch(content, () => {
+  generateOutline()
+})
+
 onMounted(async () => {
   await articleStore.fetchCategories()
   await articleStore.fetchTags()
@@ -29,6 +167,20 @@ onMounted(async () => {
   if (isEdit.value) {
     await loadArticle()
   }
+  generateOutline()
+  
+  setTimeout(() => {
+    resizeCanvas()
+    animate()
+    window.addEventListener('resize', resizeCanvas)
+  }, 100)
+})
+
+onUnmounted(() => {
+  if (animationId) {
+    cancelAnimationFrame(animationId)
+  }
+  window.removeEventListener('resize', resizeCanvas)
 })
 
 async function loadArticle() {
@@ -112,265 +264,270 @@ async function handleSubmit(isDraft = false) {
   }
 }
 
-function goBack() {
-  router.back()
+function goToHeading(lineIndex: number) {
+  const textarea = document.querySelector('.content-textarea') as HTMLTextAreaElement
+  if (textarea) {
+    const lines = content.value.split('\n')
+    let charCount = 0
+    for (let i = 0; i < lineIndex; i++) {
+      charCount += lines[i].length + 1
+    }
+    textarea.selectionStart = charCount
+    textarea.selectionEnd = charCount
+    textarea.focus()
+    textarea.scrollTop = (lineIndex - 5) * 24
+  }
+}
+
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function importMd() {
+  fileInput.value?.click()
+}
+
+function handleFileImport(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    if (text) {
+      content.value = text
+      // 自动提取标题
+      const titleMatch = text.match(/^#\s+(.+)$/m)
+      if (titleMatch && !title.value) {
+        title.value = titleMatch[1].replace(/[`*_]/g, '')
+      }
+    }
+  }
+  reader.readAsText(file)
+  target.value = ''
+}
+
+function exportMd() {
+  const blob = new Blob([content.value], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${title.value || '文章'}.md`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 </script>
 
 <template>
   <div class="write-container">
-    <aside class="write-sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-title">文章</span>
-      </div>
-      <nav class="sidebar-nav">
-        <button class="nav-item active">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span>写文章</span>
-        </button>
-        <button class="nav-item">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 11H5"/>
-            <path d="M12 19c-3.866 0-7-3.134-7-7s3.134-7 7-7 7 3.134 7 7-3.134 7-7 7z"/>
-          </svg>
-          <span>草稿箱</span>
-        </button>
-        <button class="nav-item">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
-            <path d="M19 19v-6a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
-            <line x1="12" y1="5" x2="12" y2="19"/>
-          </svg>
-          <span>文章管理</span>
-        </button>
-      </nav>
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-stats">
-        <div class="stat-item">
-          <span class="stat-value">0</span>
-          <span class="stat-label">字数统计</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-value">0</span>
-          <span class="stat-label">阅读时长</span>
-        </div>
-      </div>
-    </aside>
+    <Header />
 
-    <main class="write-main">
-      <header class="write-header">
-        <button class="back-btn" @click="goBack">← 返回</button>
-        <h1 class="page-title">{{ isEdit ? '编辑文章' : '写文章' }}</h1>
-        <div class="actions">
+    <div class="write-hero">
+      <div class="hero-bg" :style="{ backgroundImage: 'url(/Note/wallhaven-w5lr6x_2560x1440.png)' }"></div>
+      <canvas ref="meteorCanvas" class="meteor-canvas"></canvas>
+      <div class="hero-content">
+        <h1 class="hero-title">{{ isEdit ? '编辑文章' : '写文章' }}</h1>
+      </div>
+    </div>
+
+    <div class="write-body">
+      <aside class="write-sidebar">
+        <div class="sidebar-outline">
+          <h3 class="outline-title">目录</h3>
+          <ul v-if="outline.length > 0" class="outline-list">
+            <li 
+              v-for="(item, index) in outline" 
+              :key="index" 
+              class="outline-item"
+              :class="'level-' + item.level"
+              @click="goToHeading(item.lineIndex)"
+            >
+              {{ item.text }}
+            </li>
+          </ul>
+          <p v-else class="outline-empty">暂无目录</p>
+        </div>
+      </aside>
+
+      <main class="write-main">
+        <div class="editor-section">
+          <div class="title-area">
+            <input 
+              v-model="title"
+              type="text"
+              placeholder="请输入文章标题（1-100字）"
+              class="title-input"
+            />
+            <span class="char-count">{{ title.length }}/100</span>
+          </div>
+
+          <div class="content-area">
+            <textarea 
+              v-model="content"
+              placeholder="开始撰写你的文章..."
+              rows="25"
+              class="content-textarea"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-group">
+            <label>封面图片</label>
+            <div class="cover-upload">
+              <input 
+                v-model="coverImage"
+                type="text"
+                placeholder="请输入图片URL或上传图片"
+                class="cover-input"
+              />
+              <button class="upload-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>上传图片</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>分类</label>
+              <select v-model="selectedCategory" class="category-select">
+                <option value="">请选择分类</option>
+                <option v-for="cat in articleStore.categories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label>标签</label>
+              <input 
+                v-model="tagInput"
+                type="text"
+                placeholder="输入标签后回车添加"
+                @keyup.enter.prevent="addTag"
+                class="tag-input"
+              />
+            </div>
+          </div>
+
+          <div v-if="selectedTags.length > 0" class="selected-tags">
+            <span 
+              v-for="tag in selectedTags" 
+              :key="tag" 
+              class="tag-item"
+            >
+              {{ tag }}
+              <button class="tag-remove" @click="removeTag(tag)">×</button>
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label>摘要</label>
+            <textarea 
+              v-model="excerpt"
+              placeholder="请输入文章摘要（可选）"
+              rows="3"
+              class="excerpt-textarea"
+            ></textarea>
+          </div>
+
+          <p v-if="error" class="error-message">{{ error }}</p>
+        </div>
+      </main>
+
+      <aside class="write-toolbar">
+        <div class="toolbar-group">
+          <button class="toolbar-btn active" title="Markdown" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+          <button class="toolbar-btn" title="导入Markdown" @click="importMd">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </button>
+          <button class="toolbar-btn" title="导出Markdown" @click="exportMd">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+          <button class="toolbar-btn" title="预览">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+              <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </button>
+        </div>
+        <input ref="fileInput" type="file" accept=".md,.txt" style="display: none" @change="handleFileImport" />
+      </aside>
+    </div>
+
+    <footer class="write-footer">
+      <div class="footer-inner">
+        <nav class="footer-nav">
+          <RouterLink to="/write" class="footer-nav-item" :class="{ active: !isEdit }">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span>写文章</span>
+          </RouterLink>
+          <RouterLink to="/articles/manage" class="footer-nav-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 11H5"/>
+              <path d="M12 19c-3.866 0-7-3.134-7-7s3.134-7 7-7 7 3.134 7 7-3.134 7-7 7z"/>
+            </svg>
+            <span>草稿箱</span>
+          </RouterLink>
+          <RouterLink to="/articles/manage" class="footer-nav-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
+              <path d="M19 19v-6a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
+              <line x1="12" y1="5" x2="12" y2="19"/>
+            </svg>
+            <span>文章管理</span>
+          </RouterLink>
+        </nav>
+        <div class="footer-divider"></div>
+        <div class="footer-actions">
           <button 
-            class="btn btn-draft" 
+            class="footer-btn btn-draft" 
             :disabled="isSubmitting"
             @click="handleSubmit(true)"
           >
             {{ isSubmitting ? '保存中...' : '保存草稿' }}
           </button>
           <button 
-            class="btn btn-publish" 
+            class="footer-btn btn-publish" 
             :disabled="isSubmitting"
             @click="handleSubmit(false)"
           >
             {{ isSubmitting ? (isEdit ? '更新中...' : '发布中...') : (isEdit ? '更新文章' : '发布文章') }}
           </button>
-        </div>
-      </header>
-
-      <div class="editor-section">
-        <div class="title-area">
-          <input 
-            v-model="title"
-            type="text"
-            placeholder="请输入文章标题（1-100字）"
-            class="title-input"
-          />
-          <div class="title-actions">
-            <span class="char-count">{{ title.length }}/100</span>
-            <button class="action-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
-            <button class="action-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="content-area">
-          <textarea 
-            v-model="content"
-            placeholder="开始撰写你的文章..."
-            rows="25"
-            class="content-textarea"
-          ></textarea>
+          <span class="word-count">共{{ contentWordCount }}字</span>
         </div>
       </div>
-
-      <div class="form-section">
-        <div class="form-group">
-          <label>封面图片</label>
-          <div class="cover-upload">
-            <input 
-              v-model="coverImage"
-              type="text"
-              placeholder="请输入图片URL或上传图片"
-              class="cover-input"
-            />
-            <button class="upload-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-              <span>上传图片</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label>分类</label>
-            <select v-model="selectedCategory" class="category-select">
-              <option value="">请选择分类</option>
-              <option v-for="cat in articleStore.categories" :key="cat.id" :value="cat.id">
-                {{ cat.name }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group flex-1">
-            <label>标签</label>
-            <input 
-              v-model="tagInput"
-              type="text"
-              placeholder="输入标签后回车添加"
-              @keyup.enter.prevent="addTag"
-              class="tag-input"
-            />
-          </div>
-        </div>
-
-        <div v-if="selectedTags.length > 0" class="selected-tags">
-          <span 
-            v-for="tag in selectedTags" 
-            :key="tag" 
-            class="tag-item"
-          >
-            {{ tag }}
-            <button class="tag-remove">×</button>
-          </span>
-        </div>
-
-        <div class="form-group">
-          <label>摘要</label>
-          <textarea 
-            v-model="excerpt"
-            placeholder="请输入文章摘要（可选）"
-            rows="3"
-            class="excerpt-textarea"
-          ></textarea>
-        </div>
-
-        <p v-if="error" class="error-message">{{ error }}</p>
-      </div>
-    </main>
-
-    <aside class="write-toolbar">
-      <div class="toolbar-group">
-        <button class="toolbar-btn active" title="富文本">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-        </button>
-        <button class="toolbar-btn" title="Markdown">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
-        </button>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="toolbar-group">
-        <button class="toolbar-btn" title="粗体">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 4h6a4 4 0 0 1 4 4v12M6 4v16m0 0v0m0-0v0"/>
-          </svg>
-        </button>
-        <button class="toolbar-btn" title="斜体">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 4h6M14 20h6M4 14h12a2 2 0 0 1 2 2v4M4 14v-4a2 2 0 0 1 2-2h2.5"/>
-          </svg>
-        </button>
-        <button class="toolbar-btn" title="标题">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 12h8M4 16h6M4 8h8"/>
-            <path d="M16 4v16"/>
-          </svg>
-        </button>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="toolbar-group">
-        <button class="toolbar-btn" title="列表">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="8" y1="6" x2="21" y2="6"/>
-            <line x1="8" y1="12" x2="21" y2="12"/>
-            <line x1="8" y1="18" x2="21" y2="18"/>
-            <line x1="3" y1="6" x2="3.01" y2="6"/>
-            <line x1="3" y1="12" x2="3.01" y2="12"/>
-            <line x1="3" y1="18" x2="3.01" y2="18"/>
-          </svg>
-        </button>
-        <button class="toolbar-btn" title="引用">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="21 15 18 15 21 21 21 15"/>
-            <path d="M4 18h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/>
-          </svg>
-        </button>
-        <button class="toolbar-btn" title="代码">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="16 18 22 12 16 6"/>
-            <polyline points="8 6 2 12 8 18"/>
-          </svg>
-        </button>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="toolbar-group">
-        <button class="toolbar-btn" title="链接">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-          </svg>
-        </button>
-        <button class="toolbar-btn" title="图片">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-        </button>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="toolbar-group">
-        <button class="toolbar-btn" title="预览">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
-            <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-          </svg>
-        </button>
-      </div>
-    </aside>
+    </footer>
   </div>
 </template>
 
@@ -379,47 +536,112 @@ function goBack() {
   min-height: 100vh;
   background: #f6f7f8;
   display: flex;
+  flex-direction: column;
+}
+
+.write-hero {
+  position: relative;
+  height: 33.33vh;
+  min-height: 250px;
+  overflow: hidden;
+}
+
+.hero-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.6);
+  z-index: 0;
+}
+
+.meteor-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  text-align: center;
+  padding: 2rem;
+}
+
+.hero-title {
+  font-size: 3rem;
+  font-weight: 700;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.write-body {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .write-sidebar {
-  width: 200px;
+  width: 220px;
   background: #ffffff;
   border-right: 1px solid #e8e8e8;
-  padding: 1.5rem 0;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  left: 0;
+  padding-left: 24px;
+  padding-right: 24px;
+  padding-top: 32px;
+  padding-bottom: 32px;
+  position: sticky;
   top: 0;
-  bottom: 0;
+  align-self: flex-start;
+  height: calc(100vh - 250px - 80px);
+  overflow-y: auto;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 8px;
 }
 
-.sidebar-header {
-  padding: 0 1.5rem 1.5rem;
-  border-bottom: 1px solid #e8e8e8;
+.sidebar-outline {
+  padding: 0 1rem;
 }
 
-.sidebar-title {
-  font-size: 1.125rem;
+.outline-title {
+  font-size: 1.2rem;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #333;
+  margin-bottom: 0.75rem;
 }
 
-.sidebar-nav {
-  padding: 1rem 0;
+.outline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.nav-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.5rem;
-  background: none;
-  border: none;
-  cursor: pointer;
+.outline-item {
+  padding: 0.5rem 0.75rem;
   color: #666;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 4px;
   transition: all 0.2s;
 
   &:hover {
@@ -427,115 +649,39 @@ function goBack() {
     color: #1a1a1a;
   }
 
-  &.active {
-    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
-    color: var(--color-accent);
-    border-left: 2px solid var(--color-accent);
+  &.level-1 {
+    padding-left: 0.75rem;
+    font-weight: 500;
+    color: #333;
+  }
+
+  &.level-2 {
+    padding-left: 1.75rem;
+  }
+
+  &.level-3 {
+    padding-left: 2.75rem;
+    font-size: 0.75rem;
+    color: #999;
   }
 }
 
-.sidebar-divider {
-  height: 1px;
-  background: #e8e8e8;
-  margin: 0 1rem;
-}
-
-.sidebar-stats {
-  padding: 1.5rem 1.5rem;
-  display: flex;
-  gap: 1.5rem;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.stat-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.stat-label {
-  font-size: 0.75rem;
+.outline-empty {
+  font-size: 0.8rem;
   color: #999;
+  text-align: center;
+  padding: 1rem 0;
 }
 
 .write-main {
   flex: 1;
-  margin-left: 200px;
-  margin-right: 60px;
   padding: 2rem;
-  padding-bottom: 3rem;
-}
-
-.write-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e8e8e8;
-  margin-bottom: 2rem;
-}
-
-.back-btn {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: color 0.2s;
-
-  &:hover {
-    color: var(--color-accent);
-  }
-}
-
-.page-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-}
-
-.btn {
-  padding: 0.5rem 1.5rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-}
-
-.btn-draft {
-  background: #f5f5f5;
-  color: #666;
-
-  &:hover:not(:disabled) {
-    background: #e8e8e8;
-  }
-}
-
-.btn-publish {
-  background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
-  color: white;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
-  }
+  padding-top: 20px;
+  padding-bottom: 20px;
+  padding-left: 24px;
+  padding-right: 24px;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .editor-section {
@@ -567,36 +713,9 @@ function goBack() {
   }
 }
 
-.title-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 .char-count {
   font-size: 0.75rem;
   color: #999;
-  padding-right: 0.5rem;
-  border-right: 1px solid #e8e8e8;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: none;
-  background: #f5f5f5;
-  color: #666;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #e8e8e8;
-    color: #1a1a1a;
-  }
 }
 
 .content-area {
@@ -626,6 +745,10 @@ function goBack() {
   border: 1px solid #e8e8e8;
   border-radius: 8px;
   padding: 1.5rem;
+  margin-left: 0;
+  margin-right: 0;
+  margin-top: -2px;
+  margin-bottom: -2px;
 }
 
 .form-group {
@@ -754,10 +877,15 @@ function goBack() {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  position: fixed;
-  right: 0;
+  position: sticky;
   top: 0;
-  bottom: 0;
+  align-self: flex-start;
+  height: fit-content;
+  max-height: calc(100vh - 250px - 60px);
+  overflow-y: auto;
+  margin-top: 32px;
+  margin-bottom: 32px;
+  border-radius: 8px;
 }
 
 .toolbar-group {
@@ -797,33 +925,122 @@ function goBack() {
   margin: 0.5rem 0;
 }
 
+.write-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: #ffffff;
+  border-top: 1px solid #e8e8e8;
+  z-index: 100;
+}
+
+.footer-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.footer-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.footer-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  color: #666;
+  font-size: 0.875rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+  text-decoration: none;
+
+  &:hover {
+    background: #f5f5f5;
+    color: #1a1a1a;
+    text-decoration: none;
+  }
+
+  &.active {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+}
+
+.footer-divider {
+  width: 1px;
+  height: 24px;
+  background: #e8e8e8;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.word-count {
+  font-size: 0.875rem;
+  color: #999;
+  margin-left: 0.5rem;
+}
+
+.footer-btn {
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.btn-draft {
+  background: #f5f5f5;
+  color: #666;
+
+  &:hover:not(:disabled) {
+    background: #e8e8e8;
+  }
+}
+
+.btn-publish {
+  background: linear-gradient(135deg, #00d4ff 0%, #a855f7 100%);
+  color: white;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+  }
+}
+
 @media (max-width: 1024px) {
   .write-sidebar {
     width: 60px;
   }
 
-  .sidebar-header,
-  .sidebar-nav span,
-  .sidebar-stats {
+  .sidebar-outline {
     display: none;
   }
 
-  .nav-item {
-    justify-content: center;
-    padding: 0.75rem;
-    border-left: none;
-
-    &.active {
-      border-left: none;
-      border-radius: 6px;
-    }
-  }
-
-  .write-main {
-    margin-left: 60px;
-  }
-
   .write-toolbar {
+    display: none;
+  }
+
+  .footer-nav-item span {
     display: none;
   }
 }
@@ -834,18 +1051,24 @@ function goBack() {
   }
 
   .write-main {
-    margin-left: 0;
     padding: 1rem;
-  }
-
-  .write-header {
-    flex-direction: column;
-    gap: 1rem;
-    text-align: center;
+    padding-bottom: 80px;
   }
 
   .form-row {
     flex-direction: column;
+  }
+
+  .hero-title {
+    font-size: 2rem;
+  }
+
+  .footer-inner {
+    padding: 0 1rem;
+  }
+
+  .footer-nav-item span {
+    display: none;
   }
 }
 </style>

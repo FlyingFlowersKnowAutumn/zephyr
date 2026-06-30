@@ -360,7 +360,14 @@ async function saveAnnouncement() {
     </div>
 
     <div class="sidebar-card tag-sphere-card">
-      <h3 class="card-title">🏷️ 标签</h3>
+      <div class="tag-header">
+        <span class="tag-title">标签</span>
+        <RouterLink to="/tags" class="tag-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </RouterLink>
+      </div>
       <div v-if="tags.length" 
            ref="tagSphereRef" 
            class="tag-sphere"
@@ -380,7 +387,7 @@ async function saveAnnouncement() {
 
     <div class="sidebar-card category-card">
       <div class="category-header">
-        <span class="category-title">📁 分类</span>
+        <span class="category-title">分类</span>
         <RouterLink to="/categories" class="category-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 18l6-6-6-6"/>
@@ -398,13 +405,24 @@ async function saveAnnouncement() {
       <div v-else class="empty-text">暂无</div>
     </div>
 
-    <div class="sidebar-card">
-      <h3 class="card-title">归档</h3>
-      <ul class="archive-list">
-        <li>
-          <RouterLink to="/archive">按时间浏览文章</RouterLink>
+    <div class="sidebar-card archive-card">
+      <div class="archive-header">
+        <span class="archive-title">归档</span>
+        <RouterLink to="/archive" class="archive-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </RouterLink>
+      </div>
+      <ul v-if="false" class="archive-list">
+        <li v-for="item in []" :key="item">
+          <RouterLink :to="{ path: '/archive' }" class="archive-link">
+            <span class="archive-name">{{ item.name }}</span>
+            <span class="archive-count">{{ item.count }}</span>
+          </RouterLink>
         </li>
       </ul>
+      <div class="empty-text">暂无</div>
     </div>
 
     <div class="sidebar-card site-info-card">
@@ -828,26 +846,34 @@ async function saveAnnouncement() {
   }
 
   .category-title {
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: #333;
     margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    &::before {
+      content: '📁';
+      font-size: 1.1rem;
+    }
   }
 
   .category-arrow {
     display: flex;
     align-items: center;
-    color: var(--color-text-secondary);
+    color: #666;
     transition: color var(--transition-default), transform 0.3s ease;
 
     svg {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
     }
 
     &:hover {
       color: var(--color-accent);
-      transform: scale(1.2);
+      transform: translateX(2px);
     }
   }
 }
@@ -858,7 +884,7 @@ async function saveAnnouncement() {
   margin: 0;
 
   li {
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.25rem;
 
     &:last-child {
       margin-bottom: 0;
@@ -870,16 +896,23 @@ async function saveAnnouncement() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0;
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
+  padding: 0.4rem 0.2rem;
+  color: #555;
+  font-size: 0.9rem;
   text-decoration: none;
-  transition: color var(--transition-default);
+  transition: all 0.2s ease;
   width: 100%;
   box-sizing: border-box;
+  border-radius: 6px;
 
   &:hover {
+    background: rgba(52, 152, 219, 0.12);
     color: var(--color-accent);
+    padding: 0.35rem 0.75rem;
+
+    .category-count {
+      color: var(--color-accent);
+    }
   }
 }
 
@@ -904,10 +937,44 @@ async function saveAnnouncement() {
 }
 
 .tag-sphere-card {
-  .card-title {
+  .tag-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    width: 100%;
+  }
+
+  .tag-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+
+    &::before {
+      content: '🏷️';
+      font-size: 1.1rem;
+    }
+  }
+
+  .tag-arrow {
+    display: flex;
+    align-items: center;
+    color: #666;
+    transition: color var(--transition-default), transform 0.3s ease;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      color: var(--color-accent);
+      transform: translateX(2px);
+    }
   }
 }
 
@@ -950,25 +1017,97 @@ async function saveAnnouncement() {
   }
 }
 
-.archive-list {
-  list-style: none;
+.archive-card {
+  .archive-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    width: 100%;
+  }
 
-  li {
-    margin-bottom: 0.5rem;
+  .archive-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 
-    a {
-      display: block;
-      padding: 0.4rem 0;
-      color: var(--color-text-secondary);
-      font-size: 0.9rem;
-      transition: color var(--transition-default);
-
-      &:hover {
-        color: var(--color-accent);
-        text-decoration: none;
-      }
+    &::before {
+      content: '🗄️';
+      font-size: 1.1rem;
     }
   }
+
+  .archive-arrow {
+    display: flex;
+    align-items: center;
+    color: #666;
+    transition: color var(--transition-default), transform 0.3s ease;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      color: var(--color-accent);
+      transform: translateX(2px);
+    }
+  }
+}
+
+.archive-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li {
+    margin-bottom: 0.25rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.archive-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  color: #555;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 6px;
+
+  &:hover {
+    background: rgba(52, 152, 219, 0.12);
+    color: var(--color-accent);
+    padding: 0.35rem 0.75rem;
+
+    .archive-count {
+      color: var(--color-accent);
+    }
+  }
+}
+
+.archive-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-count {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #999;
 }
 
 .site-info-card {

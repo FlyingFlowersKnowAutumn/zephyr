@@ -69,7 +69,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LayoutWrapper heroTitle="分类" :showSidebar="true" heroSize="small">
+  <LayoutWrapper heroTitle="分类" :showSidebar="true" heroSize="small" heroImage="/Note/wallhaven-w5lr6x_2560x1440.png">
     <SeoHead />
     
     <section class="category-content">

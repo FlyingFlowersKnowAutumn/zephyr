@@ -2,7 +2,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import Header from './Header.vue'
 import Sidebar from './Sidebar.vue'
-import gsap from 'gsap'
 
 interface Props {
   showSidebar?: boolean
@@ -68,56 +67,129 @@ function startTyping() {
   }, 100)
 }
 
-function initMeteors() {
-  const meteors = document.querySelectorAll('.meteor')
-  meteors.forEach((m, index) => {
-    gsap.killTweensOf(m)
+const meteorCanvas = ref<HTMLCanvasElement | null>(null)
 
-    const startFromTop = Math.random() > 0.5
-    let startX, startY, endX, endY
+interface Meteor {
+  x: number
+  y: number
+  length: number
+  speed: number
+  size: number
+  opacity: number
+  angle: number
+}
 
-    if (startFromTop) {
-      startX = Math.random() * (window.innerWidth + 200) - 100
-      startY = -200
-      const distance = window.innerHeight + 300
-      endX = startX - distance
-      endY = startY + distance
-    } else {
-      startX = window.innerWidth + 200
-      startY = Math.random() * (window.innerHeight + 200) - 100
-      const distance = window.innerWidth + 300
-      endX = startX - distance
-      endY = startY + distance
+let meteors: Meteor[] = []
+let animationId: number | null = null
+
+function initMeteors(width: number, height: number) {
+  meteors = []
+  const count = Math.min(Math.floor(width / 80), 30)
+  
+  for (let i = 0; i < count; i++) {
+    meteors.push(createMeteor(width, height, true))
+  }
+}
+
+function createMeteor(width: number, height: number, randomY = false): Meteor {
+  const depth = Math.random()
+  const size = depth * 1.5 + 0.5
+  const baseSpeed = 0.8
+  const speed = baseSpeed * (depth * 1.5 + 0.3)
+  
+  return {
+    x: Math.random() * width + width * 0.1,
+    y: randomY ? Math.random() * height * 0.8 : -20,
+    length: depth * 120 + 60,
+    speed,
+    size,
+    opacity: depth * 0.6 + 0.2,
+    angle: Math.PI / 4 + (Math.random() - 0.5) * 0.15
+  }
+}
+
+function updateMeteors(width: number, height: number) {
+  meteors.forEach((meteor, index) => {
+    meteor.x -= Math.cos(meteor.angle) * meteor.speed
+    meteor.y += Math.sin(meteor.angle) * meteor.speed
+    
+    if (meteor.x < -100 || meteor.y > height + 100) {
+      meteors[index] = createMeteor(width, height)
     }
-
-    gsap.set(m, {
-      x: startX,
-      y: startY,
-      rotation: 315,
-      opacity: 0
-    })
-    gsap.to(m, {
-      x: endX,
-      y: endY,
-      opacity: 0.7,
-      duration: 5 + Math.random() * 4,
-      delay: index * 0.15,
-      repeat: -1,
-      ease: 'linear'
-    })
   })
+}
+
+function drawMeteors(ctx: CanvasRenderingContext2D) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+  
+  meteors.forEach(meteor => {
+    ctx.beginPath()
+    ctx.moveTo(meteor.x, meteor.y)
+    ctx.lineTo(
+      meteor.x + Math.cos(meteor.angle) * meteor.length,
+      meteor.y - Math.sin(meteor.angle) * meteor.length
+    )
+    
+    const gradient = ctx.createLinearGradient(
+      meteor.x, meteor.y,
+      meteor.x + Math.cos(meteor.angle) * meteor.length,
+      meteor.y - Math.sin(meteor.angle) * meteor.length
+    )
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${meteor.opacity})`)
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    
+    ctx.strokeStyle = gradient
+    ctx.lineWidth = meteor.size
+    ctx.lineCap = 'round'
+    ctx.stroke()
+    
+    ctx.beginPath()
+    ctx.arc(meteor.x, meteor.y, meteor.size / 2, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(255, 255, 255, ${meteor.opacity})`
+    ctx.shadowColor = '#fff'
+    ctx.shadowBlur = meteor.size * 2
+    ctx.fill()
+    ctx.shadowBlur = 0
+  })
+}
+
+function animate() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  
+  updateMeteors(canvas.width, canvas.height)
+  drawMeteors(ctx)
+  
+  animationId = requestAnimationFrame(animate)
+}
+
+function resizeCanvas() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+  
+  initMeteors(canvas.width, canvas.height)
 }
 
 onMounted(() => {
   startTyping()
-  initMeteors()
-
-  window.addEventListener('resize', initMeteors)
+  
+  setTimeout(() => {
+    resizeCanvas()
+    animate()
+    window.addEventListener('resize', resizeCanvas)
+  }, 100)
 })
 
 onUnmounted(() => {
   if (typingInterval) clearInterval(typingInterval)
-  window.removeEventListener('resize', initMeteors)
+  if (animationId) cancelAnimationFrame(animationId)
+  window.removeEventListener('resize', resizeCanvas)
 })
 
 function scrollDown() {
@@ -135,9 +207,7 @@ function scrollDown() {
     <div v-if="showHero" class="hero-section" :class="{ 'hero-small': heroSize === 'small' }">
       <div class="hero-bg" :style="{ backgroundImage: `url(${heroImage})` }"></div>
 
-      <div class="meteors-container">
-        <div v-for="i in 40" :key="i" class="meteor"></div>
-      </div>
+      <canvas ref="meteorCanvas" class="meteor-canvas"></canvas>
 
       <div class="hero-content">
         <h1 class="hero-title">{{ heroTitle }}</h1>
@@ -200,7 +270,7 @@ function scrollDown() {
 .hero-small {
   .hero-bg {
     position: absolute;
-    background-position: top center;
+    background-position: center;
     width: 100%;
     height: 100%;
   }
@@ -215,27 +285,14 @@ function scrollDown() {
   }
 }
 
-.meteors-container {
+.meteor-canvas {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  overflow: hidden;
   z-index: 0;
-}
-
-.meteor {
-  position: absolute;
-  width: 150px;
-  height: 2px;
-  background: linear-gradient(315deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.9));
-  border-radius: 50%;
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
-  opacity: 0.7;
 }
 
 .hero-content {

@@ -38,6 +38,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/articles/manage',
+      name: 'ArticlesManage',
+      component: () => import('@/views/ArticlesManageView.vue'),
+      meta: { requiresAuth: true, requiredRole: 'blogger' }
+    },
+    {
       path: '/articles/:slug',
       name: 'ArticleDetail',
       component: () => import('@/views/ArticleDetailView.vue'),
