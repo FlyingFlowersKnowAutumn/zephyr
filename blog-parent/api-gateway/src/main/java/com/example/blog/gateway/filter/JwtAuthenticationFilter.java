@@ -33,8 +33,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/auth/guest-login",
             "/api/v1/auth/send-code",
             "/api/v1/auth/password",
-            "/api/v1/articles",
-            "/api/v1/tags",
             "/api/v1/about",
             "/api/v1/site/view"
     );

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
+import { renderMarkdown } from '@/utils/markdown'
+import { uploadImage } from '@/api/upload'
 import type { CreateArticleDTO, UpdateArticleDTO } from '@/types'
+import { ElMessage } from 'element-plus'
 import Header from '@/components/layout/Header.vue'
 
-const router = useRouter()
 const route = useRoute()
 const articleStore = useArticleStore()
 
@@ -22,8 +24,29 @@ const status = ref<'DRAFT' | 'PUBLISHED'>('DRAFT')
 const selectedCategory = ref('')
 const tagInput = ref('')
 const selectedTags = ref<string[]>([])
+const selectedTagIds = ref<string[]>([])
+const showCategoryModal = ref(false)
+const showTagModal = ref(false)
+const showTagCreateModal = ref(false)
+const newCategoryName = ref('')
+const newTagName = ref('')
 const isSubmitting = ref(false)
-const error = ref('')
+const previewMode = ref(false)
+const previewHtml = computed(() => renderMarkdown(content.value))
+
+function resetForm() {
+  title.value = ''
+  content.value = ''
+  excerpt.value = ''
+  coverImage.value = ''
+  status.value = 'DRAFT'
+  selectedCategory.value = ''
+  selectedTags.value = []
+  tagInput.value = ''
+  outline.value = []
+
+}
+
 
 const outline = ref<{ level: number; text: string; lineIndex: number }[]>([])
 const meteorCanvas = ref<HTMLCanvasElement | null>(null)
@@ -210,23 +233,59 @@ function removeTag(tag: string) {
   selectedTags.value = selectedTags.value.filter(t => t !== tag)
 }
 
+function toggleTag(tagId: string, tagName: string) {
+  const index = selectedTagIds.value.indexOf(tagId)
+  if (index === -1) {
+    selectedTagIds.value.push(tagId)
+    if (!selectedTags.value.includes(tagName)) {
+      selectedTags.value.push(tagName)
+    }
+  } else {
+    selectedTagIds.value.splice(index, 1)
+    selectedTags.value = selectedTags.value.filter(t => t !== tagName)
+  }
+}
+
+async function handleCreateCategory() {
+  if (!newCategoryName.value.trim()) return
+  
+  const success = await articleStore.createCategory(newCategoryName.value.trim())
+  if (success) {
+    ElMessage.success('分类创建成功')
+    newCategoryName.value = ''
+    showCategoryModal.value = false
+  }
+}
+
+async function handleCreateTag() {
+  if (!newTagName.value.trim()) return
+  
+  const success = await articleStore.createTag(newTagName.value.trim())
+  if (success) {
+    ElMessage.success('标签创建成功')
+    newTagName.value = ''
+    showTagCreateModal.value = false
+  }
+}
+
 async function handleSubmit(isDraft = false) {
+  const actionLabel = isEdit.value ? '更新' : (isDraft ? '保存' : '发布')
+
   if (!title.value.trim()) {
-    error.value = '请输入文章标题'
+    ElMessage.warning('请输入文章标题')
     return
   }
   if (!content.value.trim()) {
-    error.value = '请输入文章内容'
+    ElMessage.warning('请输入文章内容')
     return
   }
 
   isSubmitting.value = true
-  error.value = ''
   status.value = isDraft ? 'DRAFT' : 'PUBLISHED'
 
   try {
     let result = null
-    
+
     if (isEdit.value && articleId.value) {
       const dto: UpdateArticleDTO = {
         title: title.value.trim(),
@@ -250,14 +309,14 @@ async function handleSubmit(isDraft = false) {
       }
       result = await articleStore.saveArticle(dto)
     }
-    
+
     if (result) {
-      router.push(`/articles/${result.slug || result.id}`)
+      ElMessage.success(isDraft ? '草稿已保存' : '文章已发布')
     } else {
-      error.value = articleStore.error || (isEdit.value ? '更新失败' : '发布失败')
+      ElMessage.error(articleStore.error || `${actionLabel}失败`)
     }
   } catch (e) {
-    error.value = `${isEdit.value ? '更新' : '发布'}失败，请稍后重试`
+    ElMessage.error(`${actionLabel}失败，请稍后重试`)
     console.error(e)
   } finally {
     isSubmitting.value = false
@@ -279,31 +338,93 @@ function goToHeading(lineIndex: number) {
   }
 }
 
-const fileInput = ref<HTMLInputElement | null>(null)
+const coverUploading = ref(false)
+const contentUploading = ref(false)
+const coverFileInput = ref<HTMLInputElement | null>(null)
+const contentFileInput = ref<HTMLInputElement | null>(null)
+const contentTextarea = ref<HTMLTextAreaElement | null>(null)
 
-function importMd() {
-  fileInput.value?.click()
+function triggerCoverUpload() {
+  coverFileInput.value?.click()
 }
 
-function handleFileImport(event: Event) {
+async function handleCoverUpload(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
 
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const text = e.target?.result as string
-    if (text) {
-      content.value = text
-      // 自动提取标题
-      const titleMatch = text.match(/^#\s+(.+)$/m)
-      if (titleMatch && !title.value) {
-        title.value = titleMatch[1].replace(/[`*_]/g, '')
+  coverUploading.value = true
+  try {
+    const url = await uploadImage(file)
+    if (url) coverImage.value = url
+  } catch (e: any) {
+    ElMessage.error(e.message || '封面上传失败')
+  } finally {
+    coverUploading.value = false
+    target.value = ''
+  }
+}
+
+function triggerContentUpload() {
+  contentFileInput.value?.click()
+}
+
+async function handleContentUpload(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  contentUploading.value = true
+  try {
+    const url = await uploadImage(file)
+    if (url) insertImageToContent(url, file.name)
+  } catch (e: any) {
+    ElMessage.error(e.message || '图片上传失败')
+  } finally {
+    contentUploading.value = false
+    target.value = ''
+  }
+}
+
+function insertImageToContent(url: string, alt: string) {
+  const md = `![${alt}](${url})\n`
+  const textarea = contentTextarea.value
+  if (textarea) {
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    content.value = content.value.substring(0, start) + md + content.value.substring(end)
+    nextTick(() => {
+      textarea.focus()
+      const pos = start + md.length
+      textarea.setSelectionRange(pos, pos)
+    })
+  } else {
+    content.value += md
+  }
+}
+
+function importMd() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.md,.txt'
+  input.onchange = (e) => {
+    const target = e.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      if (text) {
+        content.value = text
+        const titleMatch = text.match(/^#\s+(.+)$/m)
+        if (titleMatch && !title.value) {
+          title.value = titleMatch[1].replace(/[`*_]/g, '')
+        }
       }
     }
+    reader.readAsText(file)
   }
-  reader.readAsText(file)
-  target.value = ''
+  input.click()
 }
 
 function exportMd() {
@@ -351,94 +472,197 @@ function exportMd() {
       </aside>
 
       <main class="write-main">
-        <div class="editor-section">
-          <div class="title-area">
-            <input 
-              v-model="title"
-              type="text"
-              placeholder="请输入文章标题（1-100字）"
-              class="title-input"
-            />
-            <span class="char-count">{{ title.length }}/100</span>
-          </div>
-
-          <div class="content-area">
-            <textarea 
-              v-model="content"
-              placeholder="开始撰写你的文章..."
-              rows="25"
-              class="content-textarea"
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="form-section">
-          <div class="form-group">
-            <label>封面图片</label>
-            <div class="cover-upload">
-              <input 
-                v-model="coverImage"
+          <div class="editor-section">
+            <div class="title-area">
+              <input
+                v-model="title"
                 type="text"
-                placeholder="请输入图片URL或上传图片"
-                class="cover-input"
+                placeholder="请输入文章标题（1-100字）"
+                class="title-input"
               />
-              <button class="upload-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <span>上传图片</span>
-              </button>
+              <span class="char-count">{{ title.length }}/100</span>
+            </div>
+
+            <div class="content-area">
+              <textarea
+                v-if="!previewMode"
+                ref="contentTextarea"
+                v-model="content"
+                placeholder="开始撰写你的文章..."
+                rows="25"
+                class="content-textarea"
+              ></textarea>
+              <div
+                v-else
+                class="preview-area markdown-body"
+                v-html="previewHtml"
+              ></div>
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label>分类</label>
-              <select v-model="selectedCategory" class="category-select">
-                <option value="">请选择分类</option>
-                <option v-for="cat in articleStore.categories" :key="cat.id" :value="cat.id">
-                  {{ cat.name }}
-                </option>
-              </select>
+          <div class="form-section">
+            <div class="form-group">
+              <label>封面图片</label>
+              <div class="cover-area">
+                <div v-if="!coverImage" class="cover-dropzone" @click="triggerCoverUpload">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <p>{{ coverUploading ? '上传中...' : '点击上传封面图片' }}</p>
+                  <span class="cover-hint">支持 jpg、png、webp，≤ 2MB</span>
+                </div>
+                <div v-else class="cover-preview">
+                  <img :src="coverImage" alt="封面预览" />
+                  <button class="cover-remove" @click="coverImage = ''" title="移除封面">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                <input ref="coverFileInput" type="file" accept="image/*" style="display:none" @change="handleCoverUpload" />
+              </div>
             </div>
-            <div class="form-group flex-1">
-              <label>标签</label>
-              <input 
-                v-model="tagInput"
-                type="text"
-                placeholder="输入标签后回车添加"
-                @keyup.enter.prevent="addTag"
-                class="tag-input"
-              />
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>分类</label>
+                <div class="form-group-actions">
+                  <select v-model="selectedCategory" class="category-select">
+                    <option value="">请选择分类</option>
+                    <option v-for="cat in articleStore.categories" :key="cat.id" :value="cat.id">
+                      {{ cat.name }}
+                    </option>
+                  </select>
+                  <button class="btn-add" @click="showCategoryModal = true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"/>
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span>新增</span>
+                  </button>
+                </div>
+              </div>
+              <div class="form-group flex-1">
+                <label>标签</label>
+                <div class="form-group-actions">
+                  <button class="btn-select-tag" @click="showTagModal = true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                      <line x1="7" y1="7" x2="7.01" y2="7"/>
+                    </svg>
+                    <span>{{ selectedTags.length > 0 ? `已选${selectedTags.length}个` : '选择标签' }}</span>
+                  </button>
+                  <button class="btn-add" @click="showTagCreateModal = true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"/>
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span>新增</span>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div v-if="selectedTags.length > 0" class="selected-tags">
-            <span 
-              v-for="tag in selectedTags" 
-              :key="tag" 
-              class="tag-item"
-            >
-              {{ tag }}
-              <button class="tag-remove" @click="removeTag(tag)">×</button>
-            </span>
-          </div>
+            <div v-if="selectedTags.length > 0" class="selected-tags">
+              <span
+                v-for="tag in selectedTags"
+                :key="tag"
+                class="tag-item"
+              >
+                {{ tag }}
+                <button class="tag-remove" @click="removeTag(tag)">×</button>
+              </span>
+            </div>
 
-          <div class="form-group">
-            <label>摘要</label>
-            <textarea 
-              v-model="excerpt"
-              placeholder="请输入文章摘要（可选）"
-              rows="3"
-              class="excerpt-textarea"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label>摘要</label>
+              <textarea
+                v-model="excerpt"
+                placeholder="请输入文章摘要（可选）"
+                rows="3"
+                class="excerpt-textarea"
+              ></textarea>
+            </div>
 
-          <p v-if="error" class="error-message">{{ error }}</p>
-        </div>
+          </div>
       </main>
+
+      <Teleport to="body">
+        <div v-if="showCategoryModal" class="modal-overlay" @click.self="showCategoryModal = false">
+          <div class="modal-container">
+            <div class="modal-header">
+              <h3>新增分类</h3>
+              <button class="modal-close" @click="showCategoryModal = false">×</button>
+            </div>
+            <div class="modal-body">
+              <input
+                v-model="newCategoryName"
+                type="text"
+                placeholder="请输入分类名称"
+                class="modal-input"
+                @keyup.enter="handleCreateCategory"
+                autofocus
+              />
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="showCategoryModal = false">取消</button>
+              <button class="btn-confirm" @click="handleCreateCategory">确认创建</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="showTagModal" class="modal-overlay" @click.self="showTagModal = false">
+          <div class="modal-container tag-modal">
+            <div class="modal-header">
+              <h3>选择标签</h3>
+              <button class="modal-close" @click="showTagModal = false">×</button>
+            </div>
+            <div class="modal-body">
+              <div class="tag-list">
+                <button
+                  v-for="tag in articleStore.tags"
+                  :key="tag.id"
+                  class="tag-item-btn"
+                  :class="{ selected: selectedTagIds.includes(tag.id) }"
+                  @click="toggleTag(tag.id, tag.name)"
+                >
+                  {{ tag.name }}
+                </button>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="showTagModal = false">取消</button>
+              <button class="btn-confirm" @click="showTagModal = false">确认选择</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="showTagCreateModal" class="modal-overlay" @click.self="showTagCreateModal = false">
+          <div class="modal-container">
+            <div class="modal-header">
+              <h3>新增标签</h3>
+              <button class="modal-close" @click="showTagCreateModal = false">×</button>
+            </div>
+            <div class="modal-body">
+              <input
+                v-model="newTagName"
+                type="text"
+                placeholder="请输入标签名称"
+                class="modal-input"
+                @keyup.enter="handleCreateTag"
+                autofocus
+              />
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="showTagCreateModal = false">取消</button>
+              <button class="btn-confirm" @click="handleCreateTag">确认创建</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <aside class="write-toolbar">
         <div class="toolbar-group">
@@ -471,14 +695,24 @@ function exportMd() {
         </div>
         <div class="toolbar-divider"></div>
         <div class="toolbar-group">
-          <button class="toolbar-btn" title="预览">
+          <button class="toolbar-btn" title="插入图片" :disabled="contentUploading" @click="triggerContentUpload">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+        </div>
+        <input ref="contentFileInput" type="file" accept="image/*" style="display:none" @change="handleContentUpload" />
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+          <button class="toolbar-btn" title="预览" :class="{ active: previewMode }" @click="previewMode = !previewMode">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
               <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
             </svg>
           </button>
         </div>
-        <input ref="fileInput" type="file" accept=".md,.txt" style="display: none" @change="handleFileImport" />
       </aside>
     </div>
 
@@ -492,14 +726,14 @@ function exportMd() {
             </svg>
             <span>写文章</span>
           </RouterLink>
-          <RouterLink to="/articles/manage" class="footer-nav-item">
+          <RouterLink to="/articles/manage?tab=draft" class="footer-nav-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 11H5"/>
               <path d="M12 19c-3.866 0-7-3.134-7-7s3.134-7 7-7 7 3.134 7 7-3.134 7-7 7z"/>
             </svg>
             <span>草稿箱</span>
           </RouterLink>
-          <RouterLink to="/articles/manage" class="footer-nav-item">
+          <RouterLink to="/articles/manage?tab=manage" class="footer-nav-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
               <path d="M19 19v-6a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z"/>
@@ -740,6 +974,70 @@ function exportMd() {
   }
 }
 
+.preview-area {
+  min-height: 400px;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--color-text-secondary);
+
+  :deep(h1), :deep(h2), :deep(h3), :deep(h4) {
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem 0;
+    color: #1a1a1a;
+    line-height: 1.3;
+
+    &:first-child { margin-top: 0; }
+  }
+  :deep(h1) { font-size: 1.75rem; border-bottom: 1px solid #e8e8e8; padding-bottom: 0.5rem; }
+  :deep(h2) { font-size: 1.5rem; border-bottom: 1px solid #e8e8e8; padding-bottom: 0.4rem; }
+  :deep(h3) { font-size: 1.25rem; }
+  :deep(h4) { font-size: 1.1rem; }
+
+  :deep(p) { margin: 0 0 0.875rem 0; }
+  :deep(a) { color: var(--color-accent); }
+  :deep(ul), :deep(ol) { padding-left: 1.5rem; margin: 0.5rem 0 1rem 0; }
+  :deep(li) { margin: 0.25rem 0; }
+
+  :deep(code) {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.875em;
+  }
+
+  :deep(pre) {
+    background: #f4f4f5;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 1rem 0;
+
+    code { background: none; padding: 0; color: #333; font-size: 0.875rem; line-height: 1.6; }
+  }
+
+  :deep(blockquote) {
+    border-left: 4px solid #ccc;
+    padding: 0.25rem 0 0.25rem 1rem;
+    margin: 1rem 0;
+    color: #666;
+  }
+
+  :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  :deep(th), :deep(td) {
+    border: 1px solid #e8e8e8;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+  :deep(th) { background: #fafafa; font-weight: 600; }
+  :deep(img) { max-width: 100%; border-radius: 6px; }
+}
+
 .form-section {
   background: #ffffff;
   border: 1px solid #e8e8e8;
@@ -792,32 +1090,129 @@ function exportMd() {
   flex: 1;
 }
 
-.cover-upload {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.cover-input {
-  flex: 1;
-}
-
-.upload-btn {
+.form-group-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border: 1px dashed #ccc;
+
+  select {
+    flex: 1;
+  }
+}
+
+.btn-add {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e8e8e8;
   border-radius: 6px;
-  background: #fafafa;
-  color: #666;
-  font-size: 0.875rem;
+  background: #fff;
+  color: var(--color-accent);
+  font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
     border-color: var(--color-accent);
+    background: rgba(52, 152, 219, 0.05);
+  }
+}
+
+.btn-select-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  justify-content: flex-start;
+
+  &:hover {
+    border-color: var(--color-accent);
     color: var(--color-accent);
-    background: rgba(0, 212, 255, 0.05);
+  }
+}
+
+.cover-area {
+  width: 100%;
+}
+
+.cover-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  border: 2px dashed #d0d0d0;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  color: #999;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: rgba(0, 212, 255, 0.04);
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}
+
+.cover-hint {
+  font-size: 0.75rem;
+  color: #ccc;
+}
+
+.cover-preview {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 200px;
+  display: inline-block;
+
+  img {
+    display: block;
+    max-height: 200px;
+    width: auto;
+    border-radius: 8px;
+  }
+}
+
+.cover-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+
+  .cover-preview:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: #ef4444;
   }
 }
 
@@ -859,13 +1254,6 @@ function exportMd() {
 
 .excerpt-textarea {
   resize: vertical;
-}
-
-.error-message {
-  color: #ef4444;
-  font-size: 0.875rem;
-  text-align: center;
-  margin-top: 1rem;
 }
 
 .write-toolbar {
@@ -1069,6 +1457,146 @@ function exportMd() {
 
   .footer-nav-item span {
     display: none;
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 480px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+
+  &.tag-modal {
+    max-width: 600px;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e8e8e8;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+  }
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+
+  &:hover {
+    color: #333;
+  }
+}
+
+.modal-body {
+  padding: 1.25rem;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tag-item-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 20px;
+  background: #fff;
+  color: #666;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  &.selected {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e8e8e8;
+}
+
+.btn-cancel {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #666;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+}
+
+.btn-confirm {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2980b9;
   }
 }
 </style>

@@ -1,12 +1,83 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
 import { listCategories, listTags } from '@/api/article'
 import { getUserProfile, getAnnouncement, updateAnnouncement } from '@/api/profile'
 import { getSiteStats } from '@/api/site'
+import { generateTocFromMarkdown, generateTocFromHtml, scrollToHeading, type TocItem } from '@/utils/toc'
 import type { CategoryDTO, TagDTO } from '@/types'
+
+interface Props {
+  articleContent?: string
+  showToc?: boolean
+  showRecentUpdates?: boolean
+  isArticlePage?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  articleContent: '',
+  showToc: false,
+  showRecentUpdates: false,
+  isArticlePage: false
+})
+
+const tocItems = ref<TocItem[]>([])
+const activeTocId = ref('')
+
+watch([() => props.articleContent, () => props.showToc], ([content, showToc]) => {
+  if (content && showToc) {
+    const items = generateTocFromMarkdown(content)
+    if (items.length > 0) {
+      tocItems.value = items
+    } else {
+      setTimeout(() => {
+        extractTocFromDom()
+      }, 100)
+    }
+  }
+}, { immediate: true })
+
+function extractTocFromDom() {
+  const articleContent = document.querySelector('.article-content')
+  if (!articleContent) return
+  
+  const headings = articleContent.querySelectorAll('h1[id], h2[id], h3[id]')
+  const items: TocItem[] = []
+  
+  headings.forEach((heading) => {
+    const level = parseInt(heading.tagName.charAt(1))
+    const id = heading.getAttribute('id')
+    const text = heading.textContent?.trim()
+    
+    if (id && text) {
+      items.push({ id, text, level })
+    }
+  })
+  
+  if (items.length > 0) {
+    tocItems.value = items
+  }
+}
+
+function handleTocClick(id: string) {
+  activeTocId.value = id
+  scrollToHeading(id)
+}
+
+function getTocIndent(level: number): string {
+  const indents: Record<number, string> = {
+    1: '0',
+    2: '1rem',
+    3: '2rem'
+  }
+  return indents[level] || '0'
+}
+
+function getTocNumber(index: number): string {
+  return `${index + 1}.`
+}
 
 const BLOGGER_ID = '6e2ca12d-5d59-43ee-a0b3-c7f50127fef8'
 
@@ -21,6 +92,7 @@ const stats = ref({
   tags: 0
 })
 const latestArticles = ref<any[]>([])
+const archiveYears = ref<{ year: string; count: number }[]>([])
 const tagSphereRef = ref<HTMLElement | null>(null)
 let animationFrameId: number | null = null
 let angleX = 0
@@ -151,7 +223,7 @@ onMounted(async () => {
     const [catResult, tagResult, articleResult] = await Promise.all([
       listCategories(),
       listTags(),
-      articleStore.fetchArticles({ page: 1, size: 5, status: 'PUBLISHED' })
+      articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
     ])
 
     if (catResult.code === 0 && catResult.data) {
@@ -172,6 +244,15 @@ onMounted(async () => {
     }
     stats.value.articles = articleResult.total
     latestArticles.value = articleResult.articles.slice(0, 3)
+
+    const yearMap: Record<string, number> = {}
+    articleResult.articles.forEach((a: any) => {
+      const y = new Date(a.publishedAt || a.createdAt).getFullYear().toString()
+      yearMap[y] = (yearMap[y] || 0) + 1
+    })
+    archiveYears.value = Object.entries(yearMap)
+      .map(([year, count]) => ({ year, count }))
+      .sort((a, b) => b.year.localeCompare(a.year))
 
     setTimeout(() => {
       initTagSphere()
@@ -233,7 +314,6 @@ function formatRelativeTime(dateString?: string): string {
   const diffMinutes = Math.floor(diffSeconds / 60)
   const diffHours = Math.floor(diffMinutes / 60)
   const diffDays = Math.floor(diffHours / 24)
-  const diffWeeks = Math.floor(diffDays / 7)
   const diffMonths = Math.floor(diffDays / 30)
   const diffYears = Math.floor(diffDays / 365)
 
@@ -339,7 +419,30 @@ async function saveAnnouncement() {
       </div>
     </div>
 
-    <div v-if="latestArticles.length" class="sidebar-card latest-articles-card">
+    <div v-if="showToc && tocItems.length" class="sidebar-card toc-card">
+      <div class="toc-header">
+        <span class="toc-icon">☰</span>
+        <span class="toc-title">目录</span>
+        <span class="toc-count">{{ tocItems.length }}</span>
+      </div>
+      <nav class="toc-nav">
+        <ul class="toc-list">
+          <li v-for="(item, index) in tocItems" :key="item.id" class="toc-item">
+            <button
+              class="toc-link"
+              :class="{ active: activeTocId === item.id }"
+              :style="{ paddingLeft: getTocIndent(item.level) }"
+              @click="handleTocClick(item.id)"
+            >
+              <span class="toc-number">{{ getTocNumber(index) }}</span>
+              <span class="toc-text">{{ item.text }}</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <div v-if="(showRecentUpdates || isArticlePage) && latestArticles.length" class="sidebar-card latest-articles-card">
       <h3 class="card-title">最新文章</h3>
       <ul class="latest-articles-list">
         <li v-for="article in latestArticles" :key="article.id">
@@ -359,7 +462,7 @@ async function saveAnnouncement() {
       </ul>
     </div>
 
-    <div class="sidebar-card tag-sphere-card">
+    <div v-if="!isArticlePage" class="sidebar-card tag-sphere-card">
       <div class="tag-header">
         <span class="tag-title">标签</span>
         <RouterLink to="/tags" class="tag-arrow">
@@ -385,7 +488,7 @@ async function saveAnnouncement() {
       <div v-else class="empty-text">暂无</div>
     </div>
 
-    <div class="sidebar-card category-card">
+    <div v-if="!isArticlePage" class="sidebar-card category-card">
       <div class="category-header">
         <span class="category-title">分类</span>
         <RouterLink to="/categories" class="category-arrow">
@@ -405,7 +508,7 @@ async function saveAnnouncement() {
       <div v-else class="empty-text">暂无</div>
     </div>
 
-    <div class="sidebar-card archive-card">
+    <div v-if="!isArticlePage" class="sidebar-card archive-card">
       <div class="archive-header">
         <span class="archive-title">归档</span>
         <RouterLink to="/archive" class="archive-arrow">
@@ -414,18 +517,18 @@ async function saveAnnouncement() {
           </svg>
         </RouterLink>
       </div>
-      <ul v-if="false" class="archive-list">
-        <li v-for="item in []" :key="item">
+      <ul v-if="archiveYears.length" class="archive-list">
+        <li v-for="item in archiveYears" :key="item.year">
           <RouterLink :to="{ path: '/archive' }" class="archive-link">
-            <span class="archive-name">{{ item.name }}</span>
+            <span class="archive-name">{{ item.year }}</span>
             <span class="archive-count">{{ item.count }}</span>
           </RouterLink>
         </li>
       </ul>
-      <div class="empty-text">暂无</div>
+      <div v-else class="empty-text">暂无</div>
     </div>
 
-    <div class="sidebar-card site-info-card">
+    <div v-if="!isArticlePage" class="sidebar-card site-info-card">
       <h3 class="card-title">网站信息</h3>
       <div class="site-info">
         <div class="info-item">
@@ -937,6 +1040,9 @@ async function saveAnnouncement() {
 }
 
 .tag-sphere-card {
+  overflow: hidden;
+  border-radius: 12px;
+
   .tag-header {
     display: flex;
     align-items: center;
@@ -980,13 +1086,15 @@ async function saveAnnouncement() {
 
 .tag-sphere {
   position: relative;
-  width: 100%;
-  height: 220px;
+  width: calc(100% + 3rem);
+  height: calc(200px + 1.5rem);
+  margin: 0 -1.5rem -1.5rem;
   perspective: 800px;
   transform-style: preserve-3d;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .sphere-tag {
@@ -997,18 +1105,24 @@ async function saveAnnouncement() {
   text-decoration: none;
   transform-style: preserve-3d;
   pointer-events: auto;
+  max-width: 80%;
+  box-sizing: border-box;
 
   .sphere-tag-inner {
     display: inline-block;
-    padding: 0.25rem 0.6rem;
+    padding: 0.2rem 0.5rem;
     background: var(--tag-color);
     opacity: 0.85;
     color: white;
     border-radius: 4px;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
     cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
+    transform-origin: center center;
   }
 
   &:hover .sphere-tag-inner {
@@ -1139,6 +1253,160 @@ async function saveAnnouncement() {
   color: var(--color-text-secondary);
   font-size: 0.85rem;
   padding: 0.5rem 0;
+}
+
+.toc-card {
+  padding: 0;
+}
+
+.toc-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+
+  .toc-icon {
+    font-size: 0.9rem;
+    color: var(--color-accent);
+  }
+
+  .toc-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    flex: 1;
+  }
+
+  .toc-count {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+  }
+}
+
+.toc-nav {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toc-item {
+  margin-bottom: 0;
+}
+
+.toc-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    color: var(--color-accent);
+  }
+
+  &.active {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--color-accent);
+    font-weight: 500;
+
+    .toc-number {
+      color: var(--color-accent);
+    }
+  }
+}
+
+.toc-number {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  min-width: 1.5rem;
+  transition: color 0.25s ease;
+}
+
+.toc-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-updates-card {
+  .card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    &::before {
+      content: '🔄';
+      font-size: 1rem;
+    }
+  }
+}
+
+.recent-updates-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recent-updates-list li {
+  margin-bottom: 0.5rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.update-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 212, 255, 0.1);
+
+    .update-title {
+      color: var(--color-accent);
+    }
+  }
+}
+
+.update-title {
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.update-date {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
 }
 
 @media (max-width: 1024px) {

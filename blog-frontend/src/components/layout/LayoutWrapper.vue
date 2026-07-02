@@ -10,6 +10,11 @@ interface Props {
   heroSubtitle?: string
   heroImage?: string
   heroSize?: 'full' | 'small'
+  articleContent?: string
+  showToc?: boolean
+  showRecentUpdates?: boolean
+  showRightPanel?: boolean
+  isArticlePage?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
@@ -18,7 +23,12 @@ withDefaults(defineProps<Props>(), {
   heroTitle: '微风日志',
   heroSubtitle: '微风书写我的心事',
   heroImage: '/blog.png',
-  heroSize: 'full'
+  heroSize: 'full',
+  articleContent: '',
+  showToc: false,
+  showRecentUpdates: true,
+  showRightPanel: false,
+  isArticlePage: false
 })
 
 const emit = defineEmits(['open-search'])
@@ -220,16 +230,31 @@ function scrollDown() {
 
     <div class="main-wrapper">
       <div class="main-inner">
-        <Sidebar v-if="showSidebar" />
+        <Sidebar 
+          v-if="showSidebar" 
+          :articleContent="articleContent"
+          :showToc="showToc"
+          :showRecentUpdates="showRecentUpdates"
+          :isArticlePage="isArticlePage"
+        />
         <main class="main-content">
           <slot></slot>
         </main>
+        <aside v-if="showRightPanel" class="main-right-panel">
+          <slot name="right-panel"></slot>
+        </aside>
       </div>
     </div>
 
     <footer class="footer">
       <div class="footer-inner">
         <p>&copy; {{ new Date().getFullYear() }} 微风日志. All rights reserved.</p>
+        <div class="footer-icp">
+          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="icp-link">
+            <span class="icp-icon">📋</span>
+            <span class="icp-text">粤ICP备2025XXXXXX号</span>
+          </a>
+        </div>
       </div>
     </footer>
   </div>
@@ -390,6 +415,11 @@ function scrollDown() {
   min-width: 0;
 }
 
+.main-right-panel {
+  width: 280px;
+  flex-shrink: 0;
+}
+
 .footer {
   border-top: 1px solid var(--color-border);
   padding: 2rem;
@@ -405,6 +435,32 @@ function scrollDown() {
   text-align: center;
   color: var(--color-text-secondary);
   font-size: 0.9rem;
+
+  p {
+    margin-bottom: 0.75rem;
+  }
+}
+
+.footer-icp {
+  margin-top: 0.75rem;
+}
+
+.icp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 0.8rem;
+  transition: all 0.3s;
+
+  &:hover {
+    color: var(--color-accent);
+  }
+
+  .icp-icon {
+    font-size: 0.75rem;
+  }
 }
 
 @media (max-width: 1024px) {

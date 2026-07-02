@@ -140,9 +140,10 @@ onMounted(async () => {
               <span class="article-count">{{ filteredArticles.length }} 篇文章</span>
             </div>
             <ArticleCard 
-              v-for="article in filteredArticles" 
+              v-for="(article, index) in filteredArticles" 
               :key="article.id" 
               :article="article"
+              :index="index"
             />
           </div>
         </div>
@@ -401,6 +402,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 @media (max-width: 768px) {

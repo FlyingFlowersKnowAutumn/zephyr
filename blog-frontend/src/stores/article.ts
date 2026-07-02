@@ -23,7 +23,7 @@ export const useArticleStore = defineStore('article', () => {
     error.value = ''
     try {
       const result = await articleApi.listArticles({
-        page: params?.page,
+        page: (params?.page || 1) - 1,
         size: params?.size,
         categoryId: params?.categoryId,
         tag: params?.tag,
@@ -32,10 +32,10 @@ export const useArticleStore = defineStore('article', () => {
       })
       if (result.code === 0 && result.data) {
         articles.value = result.data.content
-        return { articles: result.data.content, total: result.data.totalElements, page: result.data.number, size: result.data.size }
+        return { articles: result.data.content, total: result.data.totalElements, page: result.data.number + 1, size: result.data.size }
       }
       error.value = result.message || '获取文章列表失败'
-      return { articles: [], total: 0, page: 0, size: 10 }
+      return { articles: [], total: 0, page: 1, size: 10 }
     } catch (e) {
       error.value = '获取文章列表失败'
       return { articles: [], total: 0, page: 0, size: 10 }

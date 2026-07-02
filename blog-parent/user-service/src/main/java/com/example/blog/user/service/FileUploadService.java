@@ -42,6 +42,25 @@ public class FileUploadService {
         return url;
     }
 
+    public String uploadImage(MultipartFile file) throws IOException {
+        validateFile(file);
+
+        String extension = getFileExtension(file.getOriginalFilename());
+        String fileName = UUID.randomUUID().toString() + extension;
+
+        String dateDir = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        Path uploadDir = Paths.get(uploadPath, "images", dateDir);
+        Files.createDirectories(uploadDir);
+
+        Path filePath = uploadDir.resolve(fileName);
+        Files.copy(file.getInputStream(), filePath);
+
+        String url = baseUrl + "/images/" + dateDir + "/" + fileName;
+        log.info("Image uploaded: {}", url);
+
+        return url;
+    }
+
     public void deleteOldAvatar(String avatarUrl) {
         if (avatarUrl == null || !avatarUrl.startsWith(baseUrl)) {
             return;

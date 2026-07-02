@@ -10,28 +10,36 @@ const articles = ref<any[]>([])
 const loading = ref(true)
 const selectedYear = ref('')
 
+const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
 const groupedArticles = computed(() => {
   const groups: Record<string, any[]> = {}
 
   articles.value.forEach(article => {
     const date = new Date(article.publishedAt || article.createdAt)
     const year = `${date.getFullYear()}`
+    const month = monthNames[date.getMonth()]
+    const key = `${year}-${month}`
 
-    if (!groups[year]) {
-      groups[year] = []
+    if (!groups[key]) {
+      groups[key] = []
     }
-    groups[year].push(article)
+    groups[key].push(article)
   })
 
   return Object.entries(groups)
     .sort(([a], [b]) => b.localeCompare(a))
-    .map(([key, value]) => ({
-      year: key,
-      articles: value.sort((a, b) =>
-        new Date(b.publishedAt || b.createdAt).getTime() -
-        new Date(a.publishedAt || a.createdAt).getTime()
-      )
-    }))
+    .map(([key, value]) => {
+      const [year, month] = key.split('-')
+      return {
+        year,
+        month,
+        articles: value.sort((a, b) =>
+          new Date(b.publishedAt || b.createdAt).getTime() -
+          new Date(a.publishedAt || a.createdAt).getTime()
+        )
+      }
+    })
 })
 
 const filteredArticles = computed(() => {
@@ -99,8 +107,9 @@ onMounted(async () => {
         </div>
 
         <div class="articles-main">
-          <div v-for="group in filteredArticles" :key="group.year" class="year-section">
+          <div v-for="group in filteredArticles" :key="`${group.year}-${group.month}`" class="year-section">
             <div class="year-header">
+              <span class="month-prefix">{{ group.month }}</span>
               <span class="year-title">{{ group.year }}</span>
               <span class="year-article-count">{{ group.articles.length }} 篇文章</span>
             </div>
@@ -121,14 +130,8 @@ onMounted(async () => {
                     </svg>
                   </div>
                   <div class="article-info">
-                    <div class="article-header">
-                      <span v-if="article.tags && article.tags.length" class="article-tag">{{ article.tags[0] }}</span>
-                      <span class="article-date">{{ formatDate(article.publishedAt || article.createdAt) }}</span>
-                    </div>
+                    <span class="article-date">{{ formatDate(article.publishedAt || article.createdAt) }}</span>
                     <h3 class="article-title">{{ article.title }}</h3>
-                    <p class="article-excerpt">
-                      {{ article.excerpt || (article.content ? article.content.slice(0, 80) + '...' : '') }}
-                    </p>
                   </div>
                 </RouterLink>
               </article>
@@ -290,16 +293,23 @@ onMounted(async () => {
 }
 
 .year-section {
-  margin-bottom: 3rem;
+  margin-bottom: 1.5rem;
 }
 
 .year-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--color-border);
+}
+
+.month-prefix {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  letter-spacing: 0.05em;
 }
 
 .year-title {
@@ -319,7 +329,7 @@ onMounted(async () => {
 .articles-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
 .archive-article {
@@ -342,10 +352,11 @@ onMounted(async () => {
 }
 
 .article-cover {
-  width: 180px;
-  height: 120px;
+  width: 210px;
+  height: 100px;
   flex-shrink: 0;
   overflow: hidden;
+  background: var(--color-bg-secondary);
 
   img {
     width: 100%;
@@ -368,55 +379,28 @@ onMounted(async () => {
 
 .article-info {
   flex: 1;
-  padding: 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.article-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.8rem;
-}
-
-.article-tag {
-  padding: 0.2rem 0.5rem;
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--color-accent);
-  border-radius: 4px;
-  font-weight: 500;
-  font-size: 0.75rem;
-}
-
 .article-date {
+  font-size: 0.8rem;
   color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
 }
 
 .article-title {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
-  line-height: 1.5;
+  line-height: 1.4;
   transition: color var(--transition-default);
 
   &:hover {
     color: var(--color-accent);
   }
-}
-
-.article-excerpt {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  flex: 1;
 }
 
 @media (max-width: 768px) {
@@ -454,7 +438,7 @@ onMounted(async () => {
   }
 
   .year-section {
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
   }
 
   .article-link {

@@ -148,6 +148,11 @@ export interface ReactionResponseDTO {
   likeCount: number
 }
 
+export interface FavoriteResponseDTO {
+  favorited: boolean
+  favoriteCount: number
+}
+
 export interface UserProfileDTO {
   userId: string
   displayName?: string

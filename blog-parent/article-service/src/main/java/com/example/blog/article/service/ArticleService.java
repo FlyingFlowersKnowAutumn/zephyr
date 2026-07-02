@@ -57,18 +57,26 @@ public class ArticleService {
             categoryService.incrementArticleCount(dto.getCategoryId());
         }
 
+        ArticleStatus status = ArticleStatus.DRAFT;
+        LocalDateTime publishedAt = null;
+        if (dto.getStatus() != null && "PUBLISHED".equalsIgnoreCase(dto.getStatus())) {
+            status = ArticleStatus.PUBLISHED;
+            publishedAt = LocalDateTime.now();
+        }
+
         Article article = Article.builder()
                 .title(dto.getTitle())
                 .content(dto.getContent())
                 .excerpt(dto.getExcerpt())
                 .coverImage(dto.getCoverImage())
                 .slug(slug)
-                .status(ArticleStatus.DRAFT)
+                .status(status)
                 .authorId(authorId)
                 .authorName(authorName)
                 .categoryId(dto.getCategoryId())
                 .categoryName(categoryName)
                 .tags(dto.getTags() != null ? dto.getTags() : List.of())
+                .publishedAt(publishedAt)
                 .build();
 
         Article saved = articleRepository.save(article);
@@ -121,7 +129,7 @@ public class ArticleService {
         } else if (keyword != null && !keyword.isBlank()) {
             page = articleRepository.searchByTsVector(keyword.trim(), status.name(), pageable);
         } else {
-            page = articleRepository.findPublishedArticles(status, pageable);
+            page = articleRepository.findByStatus(status, pageable);
         }
 
         return page.map(this::convertToDTO);

@@ -31,4 +31,6 @@ public class ArticleCreateDTO {
     private String categoryId;
 
     private List<String> tags;
+
+    private String status;
 }

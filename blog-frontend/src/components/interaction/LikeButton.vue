@@ -26,7 +26,7 @@ async function toggle() {
     liked.value = result.data.liked
     likeCount.value = result.data.likeCount
   }
-  setTimeout(() => { animating.value = false }, 300)
+  setTimeout(() => { animating.value = false }, 400)
 }
 </script>
 
@@ -37,7 +37,9 @@ async function toggle() {
     :disabled="!authStore.isLoggedIn"
     @click="toggle"
   >
-    <span class="heart-icon">{{ liked ? '❤️' : '🤍' }}</span>
+    <svg class="heart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
     <span class="like-count">{{ likeCount }}</span>
   </button>
 </template>
@@ -46,19 +48,23 @@ async function toggle() {
 .like-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: 24px;
   color: var(--color-text-secondary);
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover:not(:disabled) {
     border-color: #ef4444;
     background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    transform: translateY(-1px);
   }
 
   &:disabled {
@@ -70,18 +76,46 @@ async function toggle() {
     border-color: #ef4444;
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
+
+    .heart-icon {
+      fill: #ef4444;
+      stroke: #ef4444;
+    }
   }
 
   &.animating {
-    transform: scale(1.2);
+    animation: likePop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 }
 
 .heart-icon {
-  font-size: 1rem;
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: transparent;
+  transition: fill 0.3s ease;
 }
 
 .like-count {
   font-weight: 500;
+  font-size: 0.875rem;
+}
+
+@keyframes likePop {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.3);
+  }
+  50% {
+    transform: scale(0.9);
+  }
+  70% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 </style>

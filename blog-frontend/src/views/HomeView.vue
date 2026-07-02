@@ -15,7 +15,7 @@ const articles = ref<any[]>([])
 const loading = ref(true)
 
 onMounted(async () => {
-  const result = await articleStore.fetchArticles({ page: 1, size: 8, status: 'PUBLISHED' })
+  const result = await articleStore.fetchArticles({ page: 1, size: 4, status: 'PUBLISHED' })
   articles.value = result.articles
   loading.value = false
 })
@@ -42,14 +42,15 @@ onMounted(async () => {
 
       <div v-else class="articles-list">
         <ArticleCard 
-          v-for="article in articles" 
+          v-for="(article, index) in articles" 
           :key="article.id" 
           :article="article"
+          :index="index"
         />
       </div>
 
-      <div v-if="articles.length > 0" class="view-more-section">
-        <RouterLink to="/articles" class="view-more-btn">查看全部文章</RouterLink>
+      <div v-if="articles.length > 0 && authStore.user?.role === 'blogger'" class="view-more-section">
+        <RouterLink to="/write" class="write-btn">开始写作</RouterLink>
       </div>
     </section>
   </LayoutWrapper>
@@ -57,7 +58,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .home-content {
-  max-width: 700px;
+  width: 100%;
 }
 
 .loading {
@@ -110,6 +111,9 @@ onMounted(async () => {
 
 .articles-list {
   margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 .view-more-section {
@@ -117,22 +121,6 @@ onMounted(async () => {
   padding-top: 1rem;
 }
 
-.view-more-btn {
-  display: inline-block;
-  padding: 0.875rem 2.5rem;
-  border: 1px solid var(--color-accent);
-  color: var(--color-accent);
-  border-radius: var(--border-radius);
-  font-size: 0.95rem;
-  font-weight: 500;
-  transition: all var(--transition-default);
-
-  &:hover {
-    background: var(--color-accent);
-    color: white;
-    text-decoration: none;
-  }
-}
 
 @media (max-width: 768px) {
   .home-content {
