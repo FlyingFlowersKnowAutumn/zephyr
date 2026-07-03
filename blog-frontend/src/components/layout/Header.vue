@@ -76,57 +76,42 @@ function handleSearch() {
         <nav class="nav">
           <div class="nav-item">
             <div class="search-icon" @click="handleSearch">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
+              <span class="nav-emoji">🔍</span>
               <span>搜索</span>
               <span class="search-underline"></span>
             </div>
           </div>
           <div class="nav-item">
             <RouterLink to="/">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-              </svg>
+              <span class="nav-emoji">🏠</span>
               <span class="link-text">首页</span>
               <span class="underline"></span>
             </RouterLink>
           </div>
           <div class="nav-item">
             <RouterLink to="/archive">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-              </svg>
+              <span class="nav-emoji">🗄️</span>
               <span class="link-text">归档</span>
               <span class="underline"></span>
             </RouterLink>
           </div>
           <div class="nav-item">
             <RouterLink to="/categories">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
+              <span class="nav-emoji">📂</span>
               <span class="link-text">分类</span>
               <span class="underline"></span>
             </RouterLink>
           </div>
           <div class="nav-item">
             <RouterLink to="/tags">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                <line x1="7" y1="7" x2="7.01" y2="7"/>
-              </svg>
+              <span class="nav-emoji">🏷️</span>
               <span class="link-text">标签</span>
               <span class="underline"></span>
             </RouterLink>
           </div>
           <div class="nav-item">
             <RouterLink to="/guestbook">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
-                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-              </svg>
+              <span class="nav-emoji">💬</span>
               <span class="link-text">留言</span>
               <span class="underline"></span>
             </RouterLink>
@@ -543,17 +528,22 @@ function handleSearch() {
   }
 }
 
+.nav-emoji {
+  font-size: 1rem;
+  margin-right: 4px;
+}
+
 @media (max-width: 1024px) {
   .header-inner {
     padding: 0 2rem;
   }
   
-  .nav-item span {
+  .nav-item .link-text {
     display: none;
   }
   
-  .nav-item svg {
-    margin-right: 0 !important;
+  .nav-emoji {
+    margin-right: 0;
   }
 }
 
@@ -567,7 +557,7 @@ function handleSearch() {
     gap: 0.8rem;
   }
 
-  .search-icon span {
+  .search-icon span:not(.nav-emoji) {
     display: none;
   }
 }

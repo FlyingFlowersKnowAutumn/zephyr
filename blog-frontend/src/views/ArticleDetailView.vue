@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, watch } from 'vue'
+import { onMounted, onUnmounted, computed, ref, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +12,134 @@ import ActionPanel from '@/components/interaction/ActionPanel.vue'
 import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 
 const emit = defineEmits(['open-search'])
+
+const meteorCanvas = ref<HTMLCanvasElement | null>(null)
+
+interface Meteor {
+  x: number
+  y: number
+  length: number
+  speed: number
+  size: number
+  opacity: number
+  angle: number
+}
+
+let meteors: Meteor[] = []
+let animationId: number | null = null
+
+function initMeteors(width: number, height: number) {
+  meteors = []
+  const count = Math.min(Math.floor(width / 80), 30)
+  
+  for (let i = 0; i < count; i++) {
+    meteors.push(createMeteor(width, height, true))
+  }
+}
+
+function createMeteor(width: number, height: number, randomY = false): Meteor {
+  const depth = Math.random()
+  const size = depth * 1.5 + 0.5
+  const baseSpeed = 0.8
+  const speed = baseSpeed * (depth * 1.5 + 0.3)
+  
+  return {
+    x: Math.random() * width + width * 0.1,
+    y: randomY ? Math.random() * height * 0.8 : -20,
+    length: depth * 120 + 60,
+    speed,
+    size,
+    opacity: depth * 0.6 + 0.2,
+    angle: Math.PI / 4 + (Math.random() - 0.5) * 0.15
+  }
+}
+
+function updateMeteors(width: number, height: number) {
+  meteors.forEach((meteor, index) => {
+    meteor.x -= Math.cos(meteor.angle) * meteor.speed
+    meteor.y += Math.sin(meteor.angle) * meteor.speed
+    
+    if (meteor.x < -100 || meteor.y > height + 100) {
+      meteors[index] = createMeteor(width, height)
+    }
+  })
+}
+
+function drawMeteors(ctx: CanvasRenderingContext2D) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+  
+  meteors.forEach(meteor => {
+    ctx.beginPath()
+    ctx.moveTo(meteor.x, meteor.y)
+    ctx.lineTo(
+      meteor.x + Math.cos(meteor.angle) * meteor.length,
+      meteor.y - Math.sin(meteor.angle) * meteor.length
+    )
+    
+    const gradient = ctx.createLinearGradient(
+      meteor.x, meteor.y,
+      meteor.x + Math.cos(meteor.angle) * meteor.length,
+      meteor.y - Math.sin(meteor.angle) * meteor.length
+    )
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${meteor.opacity})`)
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    
+    ctx.strokeStyle = gradient
+    ctx.lineWidth = meteor.size
+    ctx.lineCap = 'round'
+    ctx.stroke()
+    
+    ctx.beginPath()
+    ctx.arc(meteor.x, meteor.y, meteor.size / 2, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(255, 255, 255, ${meteor.opacity})`
+    ctx.shadowColor = '#fff'
+    ctx.shadowBlur = meteor.size * 2
+    ctx.fill()
+    ctx.shadowBlur = 0
+  })
+}
+
+function animate() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  
+  updateMeteors(canvas.width, canvas.height)
+  drawMeteors(ctx)
+  
+  animationId = requestAnimationFrame(animate)
+}
+
+function resizeCanvas() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  const heroHeight = Math.max(window.innerHeight * 0.333, 250)
+  canvas.width = window.innerWidth
+  canvas.height = heroHeight
+  
+  initMeteors(canvas.width, canvas.height)
+}
+
+function startMeteorAnimation() {
+  const canvas = meteorCanvas.value
+  if (!canvas) return
+  
+  resizeCanvas()
+  animate()
+  
+  window.addEventListener('resize', resizeCanvas)
+}
+
+function stopMeteorAnimation() {
+  if (animationId) {
+    cancelAnimationFrame(animationId)
+    animationId = null
+  }
+  window.removeEventListener('resize', resizeCanvas)
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -47,6 +175,18 @@ onMounted(async () => {
   }
 })
 
+watch(article, (newArticle) => {
+  if (newArticle && newArticle.coverImage) {
+    nextTick(() => {
+      startMeteorAnimation()
+    })
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  stopMeteorAnimation()
+})
+
 function goBack() {
   router.back()
 }
@@ -61,18 +201,7 @@ function formatDate(dateString: string) {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
-  })
-}
-
-function formatDateTime(dateString: string) {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  }).replace(/\//g, '-')
 }
 </script>
 
@@ -81,20 +210,21 @@ function formatDateTime(dateString: string) {
     <header v-if="article && article.coverImage" class="article-hero">
       <div class="hero-bg" :style="{ backgroundImage: `url(${article.coverImage})` }"></div>
       <div class="hero-overlay"></div>
+      <canvas ref="meteorCanvas" class="meteor-canvas"></canvas>
       <div class="hero-content">
         <h1 class="article-title">{{ article.title }}</h1>
         <div class="article-meta-row">
-          <span class="meta-item">发表于 {{ formatDateTime(article.createdAt) }}</span>
-          <span v-if="article.updatedAt !== article.createdAt" class="meta-divider">|</span>
-          <span v-if="article.updatedAt !== article.createdAt" class="meta-item">更新于 {{ formatDateTime(article.updatedAt) }}</span>
+          <span class="meta-item">📅 发表于 {{ formatDate(article.createdAt) }}</span>
+          <span class="meta-divider">|</span>
+          <span class="meta-item">🔄 更新于 {{ formatDate(article.updatedAt || article.createdAt) }}</span>
           <span class="meta-divider">|</span>
           <RouterLink v-if="article.categoryName" :to="{ path: '/categories', query: { category: article.categoryName } }" class="meta-item category-link">
-            {{ article.categoryName }}
+            📁 {{ article.categoryName }}
           </RouterLink>
-          <span v-else class="meta-item">未分类</span>
+          <span v-else class="meta-item">📁 未分类</span>
         </div>
         <div class="article-meta-row">
-          <span class="meta-item">浏览量: {{ article.viewCount }}</span>
+          <span class="meta-item">👁️ 浏览量: {{ article.viewCount }}</span>
         </div>
       </div>
     </header>
@@ -105,7 +235,7 @@ function formatDateTime(dateString: string) {
         :articleContent="article?.content || ''"
         :showToc="true"
         :showRecentUpdates="true"
-        :showRightPanel="true"
+        :showRightPanel="false"
         :isArticlePage="true"
         @open-search="emit('open-search')"
       >
@@ -120,13 +250,13 @@ function formatDateTime(dateString: string) {
       <div v-if="article && !article.coverImage" class="article-header-no-bg">
         <h1 class="article-title">{{ article.title }}</h1>
         <div class="article-meta">
-          <span class="meta-item">发表于 {{ formatDateTime(article.createdAt) }}</span>
-          <span v-if="article.updatedAt !== article.createdAt" class="meta-item">更新于 {{ formatDateTime(article.updatedAt) }}</span>
+          <span class="meta-item">📅 发表于 {{ formatDate(article.createdAt) }}</span>
+          <span class="meta-item">🔄 更新于 {{ formatDate(article.updatedAt || article.createdAt) }}</span>
           <RouterLink v-if="article.categoryName" :to="{ path: '/categories', query: { category: article.categoryName } }" class="meta-item category-link">
-            {{ article.categoryName }}
+            📁 {{ article.categoryName }}
           </RouterLink>
-          <span v-else class="meta-item">未分类</span>
-          <span class="meta-item">浏览量: {{ article.viewCount }}</span>
+          <span v-else class="meta-item">📁 未分类</span>
+          <span class="meta-item">👁️ 浏览量: {{ article.viewCount }}</span>
         </div>
       </div>
 
@@ -173,15 +303,14 @@ function formatDateTime(dateString: string) {
         </div>
       </div>
 
+      <ActionPanel 
+        v-if="article && !loading"
+        :article-id="articleId" 
+        :article-title="article?.title"
+        :article-content="article?.content"
+      />
+
       <CopyrightModal :visible="showCopyrightModal" @close="showCopyrightModal = false" />
-      
-      <template #right-panel>
-        <ActionPanel 
-          :article-id="articleId" 
-          :article-title="article?.title"
-          :article-content="article?.content"
-        />
-      </template>
     </LayoutWrapper>
   </div>
 </template>
@@ -210,6 +339,7 @@ function formatDateTime(dateString: string) {
     background-size: cover;
     background-position: center;
     transition: transform 0.6s ease;
+    filter: brightness(1);
   }
 
   &:hover .hero-bg {
@@ -223,6 +353,17 @@ function formatDateTime(dateString: string) {
     right: 0;
     bottom: 0;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.8));
+    z-index: 0;
+  }
+
+  .meteor-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
   }
 
   .hero-content {
@@ -262,7 +403,8 @@ function formatDateTime(dateString: string) {
       gap: 0.375rem;
 
       .meta-icon {
-        font-size: 0.85rem;
+        width: 16px;
+        height: 16px;
       }
     }
   }
@@ -290,6 +432,17 @@ function formatDateTime(dateString: string) {
     gap: 1.5rem;
     color: var(--color-text-secondary);
     font-size: 0.875rem;
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+
+      .meta-icon {
+        width: 16px;
+        height: 16px;
+      }
+    }
   }
 }
 

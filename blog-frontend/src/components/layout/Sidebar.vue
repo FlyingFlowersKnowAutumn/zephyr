@@ -419,9 +419,13 @@ async function saveAnnouncement() {
       </div>
     </div>
 
-    <div v-if="showToc && tocItems.length" class="sidebar-card toc-card">
+    <div v-if="showToc && tocItems.length && isArticlePage" class="sidebar-card toc-card">
       <div class="toc-header">
-        <span class="toc-icon">☰</span>
+        <svg class="toc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="18" x2="20" y2="18" />
+        </svg>
         <span class="toc-title">目录</span>
         <span class="toc-count">{{ tocItems.length }}</span>
       </div>
@@ -1042,6 +1046,9 @@ async function saveAnnouncement() {
 .tag-sphere-card {
   overflow: hidden;
   border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #e8f5e9 30%, #c8e6c9 100%);
+  border: none !important;
+ 
 
   .tag-header {
     display: flex;
@@ -1257,30 +1264,34 @@ async function saveAnnouncement() {
 
 .toc-card {
   padding: 0;
+  border: none;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .toc-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
 
   .toc-icon {
-    font-size: 0.9rem;
-    color: var(--color-accent);
+    width: 18px;
+    height: 18px;
+    color: #22c55e;
   }
 
   .toc-title {
     font-size: 0.95rem;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: #333;
     flex: 1;
   }
 
   .toc-count {
     font-size: 0.8rem;
-    color: var(--color-text-secondary);
+    color: #999;
     font-weight: 600;
   }
 }
@@ -1305,31 +1316,32 @@ async function saveAnnouncement() {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  padding: 0.45rem 1.25rem;
+  padding: 0.5rem 1rem;
   background: transparent;
   border: none;
   border-radius: 0;
-  color: var(--color-text-secondary);
+  color: #666;
   font-size: 0.85rem;
   cursor: pointer;
   width: 100%;
   text-align: left;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 
   &:hover {
-    color: var(--color-accent);
+    background: rgba(52, 211, 153, 0.08);
+    color: #22c55e;
   }
 
   &.active {
-    background: rgba(0, 212, 255, 0.15);
-    color: var(--color-accent);
+    background: rgba(52, 211, 153, 0.15);
+    color: #22c55e;
     font-weight: 500;
 
     .toc-number {
-      color: var(--color-accent);
+      color: #22c55e;
     }
   }
 }
@@ -1337,10 +1349,10 @@ async function saveAnnouncement() {
 .toc-number {
   flex-shrink: 0;
   font-size: 0.85rem;
-  color: var(--color-text-secondary);
-  font-weight: 500;
+  color: #999;
+  font-weight: 600;
   min-width: 1.5rem;
-  transition: color 0.25s ease;
+  transition: color 0.2s ease;
 }
 
 .toc-text {

@@ -17,7 +17,7 @@ interface Props {
   isArticlePage?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   showSidebar: true,
   showHero: true,
   heroTitle: '微风日志',
@@ -180,8 +180,11 @@ function resizeCanvas() {
   const canvas = meteorCanvas.value
   if (!canvas) return
   
+  const heroHeight = props.heroSize === 'full' 
+    ? window.innerHeight 
+    : Math.max(window.innerHeight * 0.333, 250)
   canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
+  canvas.height = heroHeight
   
   initMeteors(canvas.width, canvas.height)
 }
@@ -214,17 +217,19 @@ function scrollDown() {
   <div class="layout-wrapper">
     <Header @open-search="emit('open-search')" />
 
-    <div v-if="showHero" class="hero-section" :class="{ 'hero-small': heroSize === 'small' }">
+    <div v-if="showHero" class="hero-section" :class="{ 'hero-small': heroSize === 'small' || isArticlePage }">
       <div class="hero-bg" :style="{ backgroundImage: `url(${heroImage})` }"></div>
 
       <canvas ref="meteorCanvas" class="meteor-canvas"></canvas>
 
       <div class="hero-content">
-        <h1 class="hero-title">{{ heroTitle }}</h1>
-        <p v-if="heroSubtitle && heroSize === 'full'" class="hero-subtitle">{{ currentSubtitle }}<span class="cursor"></span></p>
-        <div v-if="heroSize === 'full'" class="scroll-indicator" @click="scrollDown">
-          <div class="scroll-arrow"></div>
-        </div>
+        <slot name="hero-content">
+          <h1 class="hero-title">{{ heroTitle }}</h1>
+          <p v-if="heroSubtitle && heroSize === 'full'" class="hero-subtitle">{{ currentSubtitle }}<span class="cursor"></span></p>
+          <div v-if="heroSize === 'full'" class="scroll-indicator" @click="scrollDown">
+            <div class="scroll-arrow"></div>
+          </div>
+        </slot>
       </div>
     </div>
 
@@ -240,9 +245,6 @@ function scrollDown() {
         <main class="main-content">
           <slot></slot>
         </main>
-        <aside v-if="showRightPanel" class="main-right-panel">
-          <slot name="right-panel"></slot>
-        </aside>
       </div>
     </div>
 
@@ -366,6 +368,24 @@ function scrollDown() {
   }
 }
 
+.meteor-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero-small {
+  .meteor-canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+}
+
 .scroll-indicator {
   position: absolute;
   bottom: 2rem;
@@ -397,7 +417,7 @@ function scrollDown() {
 
 .main-wrapper {
   flex: 1;
-  padding: 3rem 2rem;
+  padding: 3rem 14rem;
   background: var(--color-bg-primary);
   position: relative;
   z-index: 1;
@@ -413,11 +433,6 @@ function scrollDown() {
 .main-content {
   flex: 1;
   min-width: 0;
-}
-
-.main-right-panel {
-  width: 280px;
-  flex-shrink: 0;
 }
 
 .footer {

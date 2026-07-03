@@ -157,10 +157,10 @@ onMounted(async () => {
 
         <div v-else class="articles-list">
           <div class="selected-tag-header">
-            <h2>
-              <span class="tag-badge">{{ selectedTag }}</span>
+            <h3>
               相关文章
-            </h2>
+              <span class="tag-badge" :style="{ '--tag-color': getTagColor(selectedTag) }">{{ selectedTag }}</span>
+            </h3>
             <span class="article-count">{{ filteredArticles.length }} 篇文章</span>
           </div>
           <ArticleCard 
@@ -422,20 +422,22 @@ onMounted(async () => {
   gap: 1rem;
   margin-bottom: 1.5rem;
 
-  h2 {
+  h3 {
     font-size: 1.4rem;
     color: var(--color-text-primary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    padding-left: 21px;
+    padding-right: 21px;
   }
 
   .tag-badge {
     display: inline-block;
     padding: 0.3rem 0.75rem;
-    background: var(--color-accent);
+    background: var(--tag-color);
     color: white;
-    border-radius: 16px;
+    border-radius: 6px;
     font-size: 0.85rem;
     font-weight: normal;
   }
