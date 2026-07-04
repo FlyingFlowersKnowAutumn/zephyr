@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { createGuestbook, getGuestbookList } from '@/api/guestbook'
 import { getUserProfile } from '@/api/profile'
 import Header from '@/components/layout/Header.vue'
-import gsap from 'gsap'
 
 const LANE_COUNT = 14
 const LANE_START_PCT = 8
@@ -20,10 +19,8 @@ interface DanmakuItem {
   duration: number
   laneIndex: number
   paused: boolean
-}
-
-interface LaneState {
-  occupiedUntil: number
+  isReplay: boolean
+  animDelay: number
 }
 
 const router = useRouter()
@@ -36,9 +33,6 @@ const loading = ref(false)
 const userAvatarMap = ref<Record<string, string>>({})
 
 let danmakuId = 0
-const lanes: LaneState[] = Array.from({ length: LANE_COUNT }, () => ({
-  occupiedUntil: 0
-}))
 const backgroundImages = [
   '/Note/wallhaven-8gdg62_2560x1440.png',
   '/Note/wallhaven-8grwv1_2560x1440.png',
@@ -168,119 +162,47 @@ function getRandomBackground() {
 }
 
 function calcDuration(text: string): number {
-  const BASE = 35
-  const MIN = 12
-  const FACTOR = -0.25
+  const BASE = 26
+  const MIN = 20
+  const FACTOR = -0.04
   return Math.max(MIN, BASE + text.length * FACTOR)
 }
 
-const tweenMap = new Map<number, gsap.core.Tween>()
+// CSS animation 弹幕管理
+const laneReady = new Array(LANE_COUNT).fill(0)
 
-const laneUseCount = new Array(LANE_COUNT).fill(0)
+const replayPool: DanmakuItem[] = []
 
-function startDanmakuAnimation(danmaku: DanmakuItem) {
-  nextTick(() => {
-    const el = document.querySelector(`[data-danmaku-id="${danmaku.id}"]`) as HTMLElement
-    if (!el) return
-
-    const group = laneUseCount[danmaku.laneIndex] % 3
-    laneUseCount[danmaku.laneIndex]++
-    const startOffset = group * 15 + Math.random() * 5
-    const tween = gsap.fromTo(el,
-      { left: `${100 + startOffset}%` },
-      {
-        left: '-2000px',
-        duration: danmaku.duration,
-        ease: 'none',
-        onComplete: () => {
-          tweenMap.delete(danmaku.id)
-          onDanmakuEnd(danmaku.id, danmaku.laneIndex)
-        }
-      }
-    )
-    tweenMap.set(danmaku.id, tween)
-  })
-}
-
-function acquireLane(duration: number): number | null {
+function launchOnLane(item: DanmakuItem) {
   const now = Date.now()
+
+  // 收集空闲轨道和最早就绪轨道
+  const free: number[] = []
+  let earliest = laneReady[0]
   for (let i = 0; i < LANE_COUNT; i++) {
-    if (lanes[i].occupiedUntil < now) {
-      lanes[i].occupiedUntil = now + duration * 1000 + 600
-      return i
-    }
+    if (laneReady[i] <= now) free.push(i)
+    if (laneReady[i] < earliest) earliest = laneReady[i]
   }
-  return null
-}
 
-function releaseLane(laneIndex: number) {
-  lanes[laneIndex].occupiedUntil = 0
-}
-
-const replayPool: { item: Omit<DanmakuItem, 'id' | 'top' | 'laneIndex'>; originalId: number }[] = []
-let newMessageQueue: DanmakuItem[] = []
-
-function scheduleReplay(item: Omit<DanmakuItem, 'id' | 'top' | 'laneIndex'>, originalId: number) {
-  setTimeout(() => {
-    replayPool.push({ item, originalId })
-    replayPool.sort((a, b) => b.item.text.length - a.item.text.length)
-    drainReplayQueue()
-  }, 2000)
-}
-
-function launchDanmakuInternal(item: DanmakuItem, isReplay: boolean) {
-  const laneIndex = acquireLane(item.duration)
-  if (laneIndex !== null) {
-    item.top = LANE_START_PCT + laneIndex * LANE_GAP_PCT
-    item.laneIndex = laneIndex
-    danmakuList.value.push(item)
-    startDanmakuAnimation(item)
+  // 优先随机选空闲轨道，无空闲则取最早就绪的
+  let lane: number
+  if (free.length > 0) {
+    lane = free[Math.floor(Math.random() * free.length)]
   } else {
-    if (isReplay) {
-      replayPool.unshift({
-        item: {
-          userId: item.userId,
-          avatarUrl: item.avatarUrl,
-          text: item.text,
-          duration: item.duration,
-          paused: false
-        },
-        originalId: item.id
-      })
-    } else {
-      newMessageQueue.push(item)
-    }
+    lane = laneReady.indexOf(earliest)
   }
-}
 
-function launchDanmaku(item: DanmakuItem) {
-  launchDanmakuInternal(item, false)
-}
+  item.top = LANE_START_PCT + lane * LANE_GAP_PCT
+  item.laneIndex = lane
 
-function drainNewMessageQueue() {
-  if (newMessageQueue.length === 0) return
-  newMessageQueue.sort((a, b) => b.text.length - a.text.length)
-  const batch = [...newMessageQueue]
-  newMessageQueue = []
-  for (const d of batch) {
-    launchDanmakuInternal(d, false)
-  }
-}
+  const delay = Math.max(0, laneReady[lane] - now)
+  const textWidth = item.text.length * 14 + 52
+  const speed = (window.innerWidth + textWidth) / item.duration
+  const clearMs = ((textWidth + 80) / speed) * 1000
+  laneReady[lane] = Math.max(now, laneReady[lane]) + clearMs
 
-function drainReplayQueue() {
-  if (replayPool.length === 0) return
-  replayPool.sort((a, b) => b.item.text.length - a.item.text.length)
-  while (replayPool.length > 0) {
-    const entry = replayPool.shift()!
-    const d: DanmakuItem = {
-      id: ++danmakuId,
-      ...entry.item,
-      top: 0,
-      laneIndex: -1
-    }
-    launchDanmakuInternal(d, true)
-    if (d.laneIndex === -1) break
-  }
+  const doPush = () => { danmakuList.value.push(item) }
+  if (delay > 0) { setTimeout(doPush, delay) } else { doPush() }
 }
 
 function getAvatarUrl(d: DanmakuItem): string | undefined {
@@ -293,44 +215,28 @@ function getAvatarUrl(d: DanmakuItem): string | undefined {
   return d.avatarUrl
 }
 
-function onDanmakuEnd(id: number, laneIndex: number) {
+function onDanmakuAnimEnd(id: number) {
   const finished = danmakuList.value.find(d => d.id === id)
   danmakuList.value = danmakuList.value.filter(d => d.id !== id)
-  releaseLane(laneIndex)
-
-  if (finished) {
-    scheduleReplay(
-      {
-        userId: finished.userId,
-        avatarUrl: finished.avatarUrl,
-        text: finished.text,
-        duration: finished.duration,
-        paused: false
-      },
-      id
-    )
-  }
-
-  drainNewMessageQueue()
-  drainReplayQueue()
+  if (finished) replayPool.push(finished)
 }
 
-function onDanmakuHover(id: number) {
-  const tween = tweenMap.get(id)
-  if (tween) tween.pause()
-  const index = danmakuList.value.findIndex(d => d.id === id)
-  if (index !== -1) {
-    danmakuList.value[index] = { ...danmakuList.value[index], paused: true }
-  }
-}
+let replayTimer: ReturnType<typeof setInterval> | null = null
 
-function onDanmakuLeave(id: number) {
-  const tween = tweenMap.get(id)
-  if (tween) tween.resume()
-  const index = danmakuList.value.findIndex(d => d.id === id)
-  if (index !== -1) {
-    danmakuList.value[index] = { ...danmakuList.value[index], paused: false }
-  }
+function startReplayLoop() {
+  replayTimer = setInterval(() => {
+    if (replayPool.length === 0) return
+    const idx = Math.floor(Math.random() * replayPool.length)
+    const entry = replayPool.splice(idx, 1)[0]
+    const d: DanmakuItem = {
+      ...entry,
+      id: ++danmakuId,
+      paused: false,
+      isReplay: true,
+      animDelay: 0
+    }
+    launchOnLane(d)
+  }, 500)
 }
 
 async function sendDanmaku() {
@@ -353,7 +259,7 @@ async function sendDanmaku() {
     })
 
     if (result.code === 0 && result.data) {
-      launchDanmaku({
+      launchOnLane({
         id: ++danmakuId,
         userId: authStore.user?.id,
         avatarUrl,
@@ -361,13 +267,10 @@ async function sendDanmaku() {
         top: 0,
         duration: calcDuration(content),
         laneIndex: -1,
-        paused: false
+        paused: false,
+        isReplay: false,
+        animDelay: 0
       })
-      // 新消息优先: 清空消息队列后再尝试回放队列
-      drainNewMessageQueue()
-      if (newMessageQueue.length === 0) {
-        drainReplayQueue()
-      }
     }
   } catch {
     // silent fail, danmaku was already optimistically removed from input
@@ -377,11 +280,11 @@ async function sendDanmaku() {
 async function loadHistory() {
   loading.value = true
   try {
-    const result = await getGuestbookList({ page: 0, size: 30 })
+    const result = await getGuestbookList({ page: 0, size: 100 })
     if (result.code === 0 && result.data) {
       const messages = result.data.content
-      messages.forEach(msg => {
-        launchDanmaku({
+      messages.forEach((msg, index) => {
+        const d: DanmakuItem = {
           id: ++danmakuId,
           userId: msg.userId,
           avatarUrl: msg.avatarUrl,
@@ -389,8 +292,11 @@ async function loadHistory() {
           top: 0,
           duration: calcDuration(msg.content),
           laneIndex: -1,
-          paused: false
-        })
+          paused: false,
+          isReplay: true,
+          animDelay: 0
+        }
+        setTimeout(() => launchOnLane(d), Math.random() * 3000 + index * 150)
       })
 
       const uniqueIds = [...new Set(messages.map(m => m.userId).filter(Boolean))]
@@ -415,18 +321,6 @@ async function loadHistory() {
 onMounted(async () => {
   currentBackground.value = getRandomBackground()
 
-  gsap.to('.page-mask', {
-    opacity: 0,
-    duration: 1,
-    ease: 'power2.out',
-    onComplete: () => {
-      const mask = document.querySelector('.page-mask')
-      if (mask) {
-        mask.setAttribute('style', 'pointer-events: none; opacity: 0;')
-      }
-    }
-  })
-
   setTimeout(() => {
     resizeCanvas()
     animate()
@@ -434,13 +328,13 @@ onMounted(async () => {
   }, 100)
 
   await loadHistory()
+  startReplayLoop()
 })
 
 onUnmounted(() => {
   if (animationId) cancelAnimationFrame(animationId)
+  if (replayTimer) clearInterval(replayTimer)
   window.removeEventListener('resize', resizeCanvas)
-  tweenMap.forEach(t => t.kill())
-  tweenMap.clear()
 })
 </script>
 
@@ -456,10 +350,14 @@ onUnmounted(() => {
         :key="danmaku.id"
         class="danmaku-item"
         :class="{ paused: danmaku.paused }"
-        :data-danmaku-id="danmaku.id"
-        :style="{ top: danmaku.top + '%' }"
-        @mouseenter="onDanmakuHover(danmaku.id)"
-        @mouseleave="onDanmakuLeave(danmaku.id)"
+        :style="{
+          top: danmaku.top + '%',
+          animationDuration: danmaku.duration + 's',
+          animationDelay: danmaku.animDelay + 's'
+        }"
+        @animationend="onDanmakuAnimEnd(danmaku.id)"
+        @mouseenter="danmaku.paused = true"
+        @mouseleave="danmaku.paused = false"
       >
         <div class="danmaku-pill">
           <img
@@ -526,8 +424,13 @@ onUnmounted(() => {
   bottom: 0;
   background: white;
   z-index: 9999;
-  opacity: 1;
-  pointer-events: none;
+  animation: mask-fade 1s ease-out forwards;
+}
+
+@keyframes mask-fade {
+  0%   { opacity: 1; visibility: visible; }
+  99%  { opacity: 0; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
 }
 
 .background-layer {
@@ -565,16 +468,25 @@ onUnmounted(() => {
 
 .danmaku-item {
   position: absolute;
-  left: 100%;
+  left: 0;
   white-space: nowrap;
   pointer-events: auto;
-  will-change: left;
+  will-change: transform;
+  animation: danmaku-scroll linear forwards;
+  animation-play-state: running;
 
   &.paused {
+    z-index: 100;
+    animation-play-state: paused;
     .danmaku-pill {
       background: rgba(0, 0, 0, 0.85);
     }
   }
+}
+
+@keyframes danmaku-scroll {
+  from { transform: translateX(100vw); }
+  to   { transform: translateX(-100%); }
 }
 
 .danmaku-pill {
