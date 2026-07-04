@@ -49,6 +49,77 @@ function resetForm() {
 
 
 const outline = ref<{ level: number; text: string; lineIndex: number }[]>([])
+const activeOutlineIndex = ref(-1)
+
+const numberedOutline = computed(() => {
+  const counters = [0, 0, 0, 0, 0, 0]
+  let lastLevel = 0
+  return outline.value.map((item, index) => {
+    if (item.level > lastLevel) {
+      counters[item.level - 1] = 0
+    }
+    counters[item.level - 1]++
+    for (let i = item.level; i < 6; i++) counters[i] = 0
+    lastLevel = item.level
+
+    const parts = []
+    for (let i = 0; i < item.level; i++) {
+      parts.push(counters[i])
+    }
+    return { ...item, number: parts.join('.'), index }
+  })
+})
+
+const outlineListRef = ref<HTMLUListElement | null>(null)
+
+function updateActiveOutline() {
+  const textarea = document.querySelector('.content-textarea') as HTMLTextAreaElement
+  if (!textarea || outline.value.length === 0) {
+    activeOutlineIndex.value = -1
+    return
+  }
+
+  const cursorPos = textarea.selectionStart
+  const lines = content.value.substring(0, cursorPos).split('\n')
+  const currentLine = lines.length
+
+  let active = -1
+  for (let i = 0; i < outline.value.length; i++) {
+    if (outline.value[i].lineIndex < currentLine) {
+      active = i
+    } else {
+      break
+    }
+  }
+  activeOutlineIndex.value = active
+  scrollActiveOutlineIntoView()
+}
+
+function scrollActiveOutlineIntoView() {
+  if (activeOutlineIndex.value < 0) return
+  nextTick(() => {
+    const el = outlineListRef.value?.querySelector('.outline-item.active') as HTMLElement
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+function onTextareaScroll() {
+  const textarea = document.querySelector('.content-textarea') as HTMLTextAreaElement
+  if (!textarea || outline.value.length === 0) return
+
+  const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 24
+  const firstVisibleLine = Math.floor(textarea.scrollTop / lineHeight)
+
+  let active = -1
+  for (let i = 0; i < outline.value.length; i++) {
+    if (outline.value[i].lineIndex <= firstVisibleLine) {
+      active = i
+    } else {
+      break
+    }
+  }
+  activeOutlineIndex.value = active
+}
 const meteorCanvas = ref<HTMLCanvasElement | null>(null)
 
 interface Meteor {
@@ -160,22 +231,33 @@ function resizeCanvas() {
 }
 
 function generateOutline() {
-  const lines = content.value.split('\n')
+  const text = content.value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const lines = text.split('\n')
   const result: { level: number; text: string; lineIndex: number }[] = []
-  
+  let inCodeBlock = false
+
   lines.forEach((line, index) => {
-    const match = line.match(/^(#{1,3})\s+(.+)$/)
+    if (/^```/.test(line)) {
+      inCodeBlock = !inCodeBlock
+      return
+    }
+
+    if (inCodeBlock) return
+
+    const match = line.match(/^(#{1,6})\s+(.+?)(?:\s+#+\s*)?$/)
     if (match) {
       const level = match[1].length
-      const text = match[2].trim()
-      result.push({
-        level,
-        text,
-        lineIndex: index
-      })
+      const headingText = match[2].trim()
+      if (headingText) {
+        result.push({
+          level,
+          text: headingText,
+          lineIndex: index
+        })
+      }
     }
   })
-  
+
   outline.value = result
 }
 
@@ -183,15 +265,24 @@ watch(content, () => {
   generateOutline()
 })
 
+function onTextareaScrollEvent() {
+  onTextareaScroll()
+}
+
 onMounted(async () => {
   await articleStore.fetchCategories()
   await articleStore.fetchTags()
-  
+
   if (isEdit.value) {
     await loadArticle()
   }
   generateOutline()
-  
+  await nextTick()
+  updateActiveOutline()
+
+  const textarea = document.querySelector('.content-textarea') as HTMLTextAreaElement
+  textarea?.addEventListener('scroll', onTextareaScrollEvent)
+
   setTimeout(() => {
     resizeCanvas()
     animate()
@@ -204,6 +295,8 @@ onUnmounted(() => {
     cancelAnimationFrame(animationId)
   }
   window.removeEventListener('resize', resizeCanvas)
+  const textarea = document.querySelector('.content-textarea') as HTMLTextAreaElement
+  textarea?.removeEventListener('scroll', onTextareaScrollEvent)
 })
 
 async function loadArticle() {
@@ -323,7 +416,7 @@ async function handleSubmit(isDraft = false) {
   }
 }
 
-function goToHeading(lineIndex: number) {
+function goToHeading(lineIndex: number, outlineIdx: number) {
   const textarea = document.querySelector('.content-textarea') as HTMLTextAreaElement
   if (textarea) {
     const lines = content.value.split('\n')
@@ -331,11 +424,18 @@ function goToHeading(lineIndex: number) {
     for (let i = 0; i < lineIndex; i++) {
       charCount += lines[i].length + 1
     }
+    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 24
     textarea.selectionStart = charCount
     textarea.selectionEnd = charCount
     textarea.focus()
-    textarea.scrollTop = (lineIndex - 5) * 24
+    textarea.scrollTop = Math.max(0, lineIndex - 3) * lineHeight
+    activeOutlineIndex.value = outlineIdx
+    scrollActiveOutlineIntoView()
   }
+}
+
+function onTextareaSelect() {
+  updateActiveOutline()
 }
 
 const coverUploading = ref(false)
@@ -416,10 +516,12 @@ function importMd() {
       const text = ev.target?.result as string
       if (text) {
         content.value = text
+        generateOutline()
         const titleMatch = text.match(/^#\s+(.+)$/m)
         if (titleMatch && !title.value) {
           title.value = titleMatch[1].replace(/[`*_]/g, '')
         }
+        nextTick(() => updateActiveOutline())
       }
     }
     reader.readAsText(file)
@@ -456,18 +558,19 @@ function exportMd() {
       <aside class="write-sidebar">
         <div class="sidebar-outline">
           <h3 class="outline-title">目录</h3>
-          <ul v-if="outline.length > 0" class="outline-list">
-            <li 
-              v-for="(item, index) in outline" 
-              :key="index" 
+          <ul ref="outlineListRef" v-if="numberedOutline.length > 0" class="outline-list">
+            <li
+              v-for="item in numberedOutline"
+              :key="item.index"
               class="outline-item"
-              :class="'level-' + item.level"
-              @click="goToHeading(item.lineIndex)"
+              :class="['level-' + item.level, { active: activeOutlineIndex === item.index }]"
+              @click="goToHeading(item.lineIndex, item.index)"
             >
-              {{ item.text }}
+              <span class="outline-number">{{ item.number }}</span>
+              <span class="outline-text">{{ item.text }}</span>
             </li>
           </ul>
-          <p v-else class="outline-empty">暂无目录</p>
+          <p v-else class="outline-empty">输入标题以生成目录</p>
         </div>
       </aside>
 
@@ -491,6 +594,8 @@ function exportMd() {
                 placeholder="开始撰写你的文章..."
                 rows="25"
                 class="content-textarea"
+                @mouseup="onTextareaSelect"
+                @keyup="onTextareaSelect"
               ></textarea>
               <div
                 v-else
@@ -768,7 +873,7 @@ function exportMd() {
 <style lang="scss" scoped>
 .write-container {
   min-height: 100vh;
-  background: #f6f7f8;
+  background: var(--color-bg-secondary);
   display: flex;
   flex-direction: column;
 }
@@ -835,8 +940,8 @@ function exportMd() {
 
 .write-sidebar {
   width: 220px;
-  background: #ffffff;
-  border-right: 1px solid #e8e8e8;
+  background: var(--color-bg-card);
+  border-right: 1px solid var(--color-border);
   padding-left: 24px;
   padding-right: 24px;
   padding-top: 32px;
@@ -860,7 +965,7 @@ function exportMd() {
 .outline-title {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #333;
+  color: var(--color-text-primary);
   margin-bottom: 0.75rem;
 }
 
@@ -871,38 +976,84 @@ function exportMd() {
 }
 
 .outline-item {
-  padding: 0.5rem 0.75rem;
-  color: #666;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  color: var(--color-text-secondary);
   font-size: 0.8rem;
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
+  line-height: 1.4;
 
   &:hover {
-    background: #f5f5f5;
-    color: #1a1a1a;
+    background: rgba(52, 211, 153, 0.08);
+    color: var(--color-text-primary);
+  }
+
+  &.active {
+    background: rgba(52, 211, 153, 0.15);
+    color: #22c55e;
+    font-weight: 500;
+
+    .outline-number {
+      color: #22c55e;
+    }
   }
 
   &.level-1 {
-    padding-left: 0.75rem;
-    font-weight: 500;
-    color: #333;
+    font-weight: 600;
+    color: var(--color-text-primary);
   }
 
   &.level-2 {
-    padding-left: 1.75rem;
+    padding-left: 1rem;
   }
 
   &.level-3 {
-    padding-left: 2.75rem;
+    padding-left: 2rem;
     font-size: 0.75rem;
-    color: #999;
+    color: var(--color-text-secondary);
   }
+
+  &.level-4 {
+    padding-left: 2.5rem;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+  }
+
+  &.level-5 {
+    padding-left: 3rem;
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+  }
+
+  &.level-6 {
+    padding-left: 3.5rem;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+  }
+}
+
+.outline-number {
+  flex-shrink: 0;
+  min-width: 1.5rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.outline-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .outline-empty {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--color-text-secondary);
   text-align: center;
   padding: 1rem 0;
 }
@@ -919,8 +1070,8 @@ function exportMd() {
 }
 
 .editor-section {
-  background: #ffffff;
-  border: 1px solid #e8e8e8;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 2rem;
@@ -939,21 +1090,21 @@ function exportMd() {
   font-weight: 600;
   border: none;
   outline: none;
-  color: #1a1a1a;
+  color: var(--color-text-primary);
   background: transparent;
 
   &::placeholder {
-    color: #ccc;
+    color: var(--color-text-secondary);
   }
 }
 
 .char-count {
   font-size: 0.75rem;
-  color: #999;
+  color: var(--color-text-secondary);
 }
 
 .content-area {
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--color-border);
   padding-top: 1.5rem;
 }
 
@@ -964,13 +1115,13 @@ function exportMd() {
   outline: none;
   font-size: 1rem;
   line-height: 1.8;
-  color: #333;
+  color: var(--color-text-primary);
   resize: vertical;
   font-family: inherit;
   background: transparent;
 
   &::placeholder {
-    color: #ccc;
+    color: var(--color-text-secondary);
   }
 }
 
@@ -983,13 +1134,13 @@ function exportMd() {
   :deep(h1), :deep(h2), :deep(h3), :deep(h4) {
     font-weight: 600;
     margin: 1.5rem 0 0.75rem 0;
-    color: #1a1a1a;
+    color: var(--color-text-primary);
     line-height: 1.3;
 
     &:first-child { margin-top: 0; }
   }
-  :deep(h1) { font-size: 1.75rem; border-bottom: 1px solid #e8e8e8; padding-bottom: 0.5rem; }
-  :deep(h2) { font-size: 1.5rem; border-bottom: 1px solid #e8e8e8; padding-bottom: 0.4rem; }
+  :deep(h1) { font-size: 1.75rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem; }
+  :deep(h2) { font-size: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.4rem; }
   :deep(h3) { font-size: 1.25rem; }
   :deep(h4) { font-size: 1.1rem; }
 
@@ -999,7 +1150,7 @@ function exportMd() {
   :deep(li) { margin: 0.25rem 0; }
 
   :deep(code) {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--color-hover-bg);
     padding: 0.2rem 0.4rem;
     border-radius: 3px;
     font-family: 'Fira Code', 'Consolas', monospace;
@@ -1007,20 +1158,20 @@ function exportMd() {
   }
 
   :deep(pre) {
-    background: #f4f4f5;
+    background: var(--color-hover-bg);
     padding: 1rem 1.25rem;
     border-radius: 8px;
     overflow-x: auto;
     margin: 1rem 0;
 
-    code { background: none; padding: 0; color: #333; font-size: 0.875rem; line-height: 1.6; }
+    code { background: none; padding: 0; color: var(--color-text-primary); font-size: 0.875rem; line-height: 1.6; }
   }
 
   :deep(blockquote) {
-    border-left: 4px solid #ccc;
+    border-left: 4px solid var(--color-border);
     padding: 0.25rem 0 0.25rem 1rem;
     margin: 1rem 0;
-    color: #666;
+    color: var(--color-text-secondary);
   }
 
   :deep(table) {
@@ -1030,17 +1181,17 @@ function exportMd() {
     font-size: 0.95rem;
   }
   :deep(th), :deep(td) {
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--color-border);
     padding: 0.5rem 0.75rem;
     text-align: left;
   }
-  :deep(th) { background: #fafafa; font-weight: 600; }
+  :deep(th) { background: var(--color-bg-secondary); font-weight: 600; }
   :deep(img) { max-width: 100%; border-radius: 6px; }
 }
 
 .form-section {
-  background: #ffffff;
-  border: 1px solid #e8e8e8;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1.5rem;
   margin-left: 0;
@@ -1056,19 +1207,19 @@ function exportMd() {
     display: block;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #333;
+    color: var(--color-text-primary);
     margin-bottom: 0.5rem;
   }
 
   input, select, textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--color-border);
     border-radius: 6px;
     font-size: 0.875rem;
-    color: #333;
+    color: var(--color-text-primary);
     transition: border-color 0.2s;
-    background: #ffffff;
+    background: var(--color-bg-card);
 
     &:focus {
       outline: none;
@@ -1076,7 +1227,7 @@ function exportMd() {
     }
 
     &::placeholder {
-      color: #ccc;
+      color: var(--color-text-secondary);
     }
   }
 }
@@ -1105,9 +1256,9 @@ function exportMd() {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-bg-card);
   color: var(--color-accent);
   font-size: 0.8rem;
   cursor: pointer;
@@ -1115,7 +1266,7 @@ function exportMd() {
 
   &:hover {
     border-color: var(--color-accent);
-    background: rgba(52, 152, 219, 0.05);
+    background: var(--color-hover-bg);
   }
 }
 
@@ -1124,10 +1275,10 @@ function exportMd() {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
-  color: #333;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1151,17 +1302,17 @@ function exportMd() {
   justify-content: center;
   gap: 0.5rem;
   padding: 2rem;
-  border: 2px dashed #d0d0d0;
+  border: 2px dashed var(--color-border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--color-bg-secondary);
   cursor: pointer;
-  color: #999;
+  color: var(--color-text-secondary);
   transition: all 0.2s;
 
   &:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
-    background: rgba(0, 212, 255, 0.04);
+    background: var(--color-hover-bg);
   }
 
   p {
@@ -1172,7 +1323,7 @@ function exportMd() {
 
 .cover-hint {
   font-size: 0.75rem;
-  color: #ccc;
+  color: var(--color-text-secondary);
 }
 
 .cover-preview {
@@ -1258,8 +1409,8 @@ function exportMd() {
 
 .write-toolbar {
   width: 60px;
-  background: #ffffff;
-  border-left: 1px solid #e8e8e8;
+  background: var(--color-bg-card);
+  border-left: 1px solid var(--color-border);
   padding: 1.5rem 0;
   display: flex;
   flex-direction: column;
@@ -1288,7 +1439,7 @@ function exportMd() {
   border-radius: 6px;
   border: none;
   background: none;
-  color: #666;
+  color: var(--color-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1296,8 +1447,8 @@ function exportMd() {
   transition: all 0.2s;
 
   &:hover {
-    background: #f5f5f5;
-    color: #1a1a1a;
+    background: var(--color-hover-bg);
+    color: var(--color-text-primary);
   }
 
   &.active {
@@ -1309,7 +1460,7 @@ function exportMd() {
 .toolbar-divider {
   height: 1px;
   width: 24px;
-  background: #e8e8e8;
+  background: var(--color-border);
   margin: 0.5rem 0;
 }
 
@@ -1319,8 +1470,8 @@ function exportMd() {
   left: 0;
   right: 0;
   height: 60px;
-  background: #ffffff;
-  border-top: 1px solid #e8e8e8;
+  background: var(--color-bg-card);
+  border-top: 1px solid var(--color-border);
   z-index: 100;
 }
 
@@ -1344,15 +1495,15 @@ function exportMd() {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.875rem;
   border-radius: 6px;
   transition: all 0.2s;
   text-decoration: none;
 
   &:hover {
-    background: #f5f5f5;
-    color: #1a1a1a;
+    background: var(--color-hover-bg);
+    color: var(--color-text-primary);
     text-decoration: none;
   }
 
@@ -1366,7 +1517,7 @@ function exportMd() {
 .footer-divider {
   width: 1px;
   height: 24px;
-  background: #e8e8e8;
+  background: var(--color-border);
 }
 
 .footer-actions {
@@ -1377,7 +1528,7 @@ function exportMd() {
 
 .word-count {
   font-size: 0.875rem;
-  color: #999;
+  color: var(--color-text-secondary);
   margin-left: 0.5rem;
 }
 
@@ -1397,11 +1548,11 @@ function exportMd() {
 }
 
 .btn-draft {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--color-hover-bg);
+  color: var(--color-text-secondary);
 
   &:hover:not(:disabled) {
-    background: #e8e8e8;
+    background: var(--color-border);
   }
 }
 
@@ -1474,7 +1625,7 @@ function exportMd() {
 }
 
 .modal-container {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 8px;
   width: 90%;
   max-width: 480px;
@@ -1491,13 +1642,13 @@ function exportMd() {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--color-border);
 
   h3 {
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
-    color: #333;
+    color: var(--color-text-primary);
   }
 }
 
@@ -1505,12 +1656,12 @@ function exportMd() {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #999;
+  color: var(--color-text-secondary);
   cursor: pointer;
   line-height: 1;
 
   &:hover {
-    color: #333;
+    color: var(--color-text-primary);
   }
 }
 
@@ -1521,10 +1672,12 @@ function exportMd() {
 .modal-input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
 
   &:focus {
     outline: none;
@@ -1542,10 +1695,10 @@ function exportMd() {
 
 .tag-item-btn {
   padding: 0.5rem 1rem;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 20px;
-  background: #fff;
-  color: #666;
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1567,21 +1720,21 @@ function exportMd() {
   justify-content: flex-end;
   gap: 0.5rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--color-border);
 }
 
 .btn-cancel {
   padding: 0.5rem 1rem;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
-  color: #666;
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #f5f5f5;
+    background: var(--color-hover-bg);
   }
 }
 
@@ -1596,7 +1749,7 @@ function exportMd() {
   transition: all 0.2s;
 
   &:hover {
-    background: #2980b9;
+    opacity: 0.85;
   }
 }
 </style>

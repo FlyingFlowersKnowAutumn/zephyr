@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -21,21 +22,23 @@ public class ReactionService {
 
     @Transactional
     public ReactionResponseDTO toggleReaction(String articleId, String userId) {
-        Optional<Reaction> existing = reactionRepository.findByUserIdAndArticleId(userId, articleId);
+        UUID articleUuid = UUID.fromString(articleId);
+        UUID userUuid = UUID.fromString(userId);
+        Optional<Reaction> existing = reactionRepository.findByUserIdAndArticleId(userUuid, articleUuid);
 
         if (existing.isPresent()) {
             reactionRepository.delete(existing.get());
-            long count = reactionRepository.countByArticleId(articleId);
+            long count = reactionRepository.countByArticleId(articleUuid);
             articleStatsClient.syncLikeCount(articleId, -1);
             log.info("Reaction removed: articleId={}, userId={}", articleId, userId);
             return ReactionResponseDTO.builder().liked(false).likeCount(count).build();
         } else {
             Reaction reaction = Reaction.builder()
-                    .articleId(articleId)
-                    .userId(userId)
+                    .articleId(articleUuid)
+                    .userId(userUuid)
                     .build();
             reactionRepository.save(reaction);
-            long count = reactionRepository.countByArticleId(articleId);
+            long count = reactionRepository.countByArticleId(articleUuid);
             articleStatsClient.syncLikeCount(articleId, 1);
             log.info("Reaction added: articleId={}, userId={}", articleId, userId);
             return ReactionResponseDTO.builder().liked(true).likeCount(count).build();
@@ -44,8 +47,16 @@ public class ReactionService {
 
     @Transactional(readOnly = true)
     public ReactionResponseDTO getReactionStatus(String articleId, String userId) {
-        boolean liked = reactionRepository.existsByUserIdAndArticleId(userId, articleId);
-        long likeCount = reactionRepository.countByArticleId(articleId);
+        UUID articleUuid = UUID.fromString(articleId);
+        boolean liked;
+        long likeCount;
+        if (userId != null) {
+            UUID userUuid = UUID.fromString(userId);
+            liked = reactionRepository.existsByUserIdAndArticleId(userUuid, articleUuid);
+        } else {
+            liked = false;
+        }
+        likeCount = reactionRepository.countByArticleId(articleUuid);
         return ReactionResponseDTO.builder().liked(liked).likeCount(likeCount).build();
     }
 }

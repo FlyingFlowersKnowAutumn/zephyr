@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { createGuestbook, getGuestbookList } from '@/api/guestbook'
@@ -7,9 +7,9 @@ import { getUserProfile } from '@/api/profile'
 import Header from '@/components/layout/Header.vue'
 import gsap from 'gsap'
 
-const LANE_COUNT = 16
+const LANE_COUNT = 14
 const LANE_START_PCT = 8
-const LANE_GAP_PCT = 5
+const LANE_GAP_PCT = 6
 
 interface DanmakuItem {
   id: number
@@ -39,8 +39,6 @@ let danmakuId = 0
 const lanes: LaneState[] = Array.from({ length: LANE_COUNT }, () => ({
   occupiedUntil: 0
 }))
-const danmakuQueue: DanmakuItem[] = []
-
 const backgroundImages = [
   '/Note/wallhaven-8gdg62_2560x1440.png',
   '/Note/wallhaven-8grwv1_2560x1440.png',
@@ -170,10 +168,38 @@ function getRandomBackground() {
 }
 
 function calcDuration(text: string): number {
-  const BASE = 30
-  const MIN = 15
-  const FACTOR = 0.1
-  return Math.max(MIN, BASE - text.length * FACTOR)
+  const BASE = 35
+  const MIN = 12
+  const FACTOR = -0.25
+  return Math.max(MIN, BASE + text.length * FACTOR)
+}
+
+const tweenMap = new Map<number, gsap.core.Tween>()
+
+const laneUseCount = new Array(LANE_COUNT).fill(0)
+
+function startDanmakuAnimation(danmaku: DanmakuItem) {
+  nextTick(() => {
+    const el = document.querySelector(`[data-danmaku-id="${danmaku.id}"]`) as HTMLElement
+    if (!el) return
+
+    const group = laneUseCount[danmaku.laneIndex] % 3
+    laneUseCount[danmaku.laneIndex]++
+    const startOffset = group * 15 + Math.random() * 5
+    const tween = gsap.fromTo(el,
+      { left: `${100 + startOffset}%` },
+      {
+        left: '-2000px',
+        duration: danmaku.duration,
+        ease: 'none',
+        onComplete: () => {
+          tweenMap.delete(danmaku.id)
+          onDanmakuEnd(danmaku.id, danmaku.laneIndex)
+        }
+      }
+    )
+    tweenMap.set(danmaku.id, tween)
+  })
 }
 
 function acquireLane(duration: number): number | null {
@@ -191,14 +217,69 @@ function releaseLane(laneIndex: number) {
   lanes[laneIndex].occupiedUntil = 0
 }
 
-function launchDanmaku(item: DanmakuItem) {
+const replayPool: { item: Omit<DanmakuItem, 'id' | 'top' | 'laneIndex'>; originalId: number }[] = []
+let newMessageQueue: DanmakuItem[] = []
+
+function scheduleReplay(item: Omit<DanmakuItem, 'id' | 'top' | 'laneIndex'>, originalId: number) {
+  setTimeout(() => {
+    replayPool.push({ item, originalId })
+    replayPool.sort((a, b) => b.item.text.length - a.item.text.length)
+    drainReplayQueue()
+  }, 2000)
+}
+
+function launchDanmakuInternal(item: DanmakuItem, isReplay: boolean) {
   const laneIndex = acquireLane(item.duration)
   if (laneIndex !== null) {
     item.top = LANE_START_PCT + laneIndex * LANE_GAP_PCT
     item.laneIndex = laneIndex
     danmakuList.value.push(item)
+    startDanmakuAnimation(item)
   } else {
-    danmakuQueue.push(item)
+    if (isReplay) {
+      replayPool.unshift({
+        item: {
+          userId: item.userId,
+          avatarUrl: item.avatarUrl,
+          text: item.text,
+          duration: item.duration,
+          paused: false
+        },
+        originalId: item.id
+      })
+    } else {
+      newMessageQueue.push(item)
+    }
+  }
+}
+
+function launchDanmaku(item: DanmakuItem) {
+  launchDanmakuInternal(item, false)
+}
+
+function drainNewMessageQueue() {
+  if (newMessageQueue.length === 0) return
+  newMessageQueue.sort((a, b) => b.text.length - a.text.length)
+  const batch = [...newMessageQueue]
+  newMessageQueue = []
+  for (const d of batch) {
+    launchDanmakuInternal(d, false)
+  }
+}
+
+function drainReplayQueue() {
+  if (replayPool.length === 0) return
+  replayPool.sort((a, b) => b.item.text.length - a.item.text.length)
+  while (replayPool.length > 0) {
+    const entry = replayPool.shift()!
+    const d: DanmakuItem = {
+      id: ++danmakuId,
+      ...entry.item,
+      top: 0,
+      laneIndex: -1
+    }
+    launchDanmakuInternal(d, true)
+    if (d.laneIndex === -1) break
   }
 }
 
@@ -213,18 +294,30 @@ function getAvatarUrl(d: DanmakuItem): string | undefined {
 }
 
 function onDanmakuEnd(id: number, laneIndex: number) {
+  const finished = danmakuList.value.find(d => d.id === id)
   danmakuList.value = danmakuList.value.filter(d => d.id !== id)
   releaseLane(laneIndex)
-  if (danmakuQueue.length > 0) {
-    const batch = [...danmakuQueue]
-    danmakuQueue.length = 0
-    for (const d of batch) {
-      launchDanmaku(d)
-    }
+
+  if (finished) {
+    scheduleReplay(
+      {
+        userId: finished.userId,
+        avatarUrl: finished.avatarUrl,
+        text: finished.text,
+        duration: finished.duration,
+        paused: false
+      },
+      id
+    )
   }
+
+  drainNewMessageQueue()
+  drainReplayQueue()
 }
 
 function onDanmakuHover(id: number) {
+  const tween = tweenMap.get(id)
+  if (tween) tween.pause()
   const index = danmakuList.value.findIndex(d => d.id === id)
   if (index !== -1) {
     danmakuList.value[index] = { ...danmakuList.value[index], paused: true }
@@ -232,6 +325,8 @@ function onDanmakuHover(id: number) {
 }
 
 function onDanmakuLeave(id: number) {
+  const tween = tweenMap.get(id)
+  if (tween) tween.resume()
   const index = danmakuList.value.findIndex(d => d.id === id)
   if (index !== -1) {
     danmakuList.value[index] = { ...danmakuList.value[index], paused: false }
@@ -268,6 +363,11 @@ async function sendDanmaku() {
         laneIndex: -1,
         paused: false
       })
+      // 新消息优先: 清空消息队列后再尝试回放队列
+      drainNewMessageQueue()
+      if (newMessageQueue.length === 0) {
+        drainReplayQueue()
+      }
     }
   } catch {
     // silent fail, danmaku was already optimistically removed from input
@@ -339,6 +439,8 @@ onMounted(async () => {
 onUnmounted(() => {
   if (animationId) cancelAnimationFrame(animationId)
   window.removeEventListener('resize', resizeCanvas)
+  tweenMap.forEach(t => t.kill())
+  tweenMap.clear()
 })
 </script>
 
@@ -354,12 +456,8 @@ onUnmounted(() => {
         :key="danmaku.id"
         class="danmaku-item"
         :class="{ paused: danmaku.paused }"
-        :style="{
-          top: danmaku.top + '%',
-          animationDuration: danmaku.duration + 's',
-          animationPlayState: danmaku.paused ? 'paused' : 'running'
-        }"
-        @animationend="onDanmakuEnd(danmaku.id, danmaku.laneIndex)"
+        :data-danmaku-id="danmaku.id"
+        :style="{ top: danmaku.top + '%' }"
         @mouseenter="onDanmakuHover(danmaku.id)"
         @mouseleave="onDanmakuLeave(danmaku.id)"
       >
@@ -470,10 +568,7 @@ onUnmounted(() => {
   left: 100%;
   white-space: nowrap;
   pointer-events: auto;
-  will-change: transform;
-  animation-name: danmaku-scroll;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
+  will-change: left;
 
   &.paused {
     .danmaku-pill {
@@ -517,15 +612,6 @@ onUnmounted(() => {
   color: #ffffff;
   font-size: 14px;
   line-height: 1.4;
-}
-
-@keyframes danmaku-scroll {
-  from {
-    left: 100%;
-  }
-  to {
-    left: -2000px;
-  }
 }
 
 .guestbook-content {

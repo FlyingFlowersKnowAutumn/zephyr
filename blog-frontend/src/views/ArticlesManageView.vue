@@ -146,8 +146,16 @@ onUnmounted(() => {
   window.removeEventListener('resize', resizeCanvas)
 })
 
-watch(activeTab, () => {
+watch(() => route.query.tab, (newTab) => {
+  const tab = (newTab as string) === 'manage' ? 'manage' : 'draft'
+  if (activeTab.value !== tab) {
+    activeTab.value = tab
+  }
+})
+
+watch(activeTab, (newTab) => {
   currentPage.value = 1
+  router.replace({ query: { tab: newTab } })
   fetchArticles()
 })
 

@@ -54,7 +54,6 @@ public class ArticleService {
         if (dto.getCategoryId() != null && !dto.getCategoryId().isBlank()) {
             var category = categoryService.getCategoryById(dto.getCategoryId());
             categoryName = category.getName();
-            categoryService.incrementArticleCount(dto.getCategoryId());
         }
 
         ArticleStatus status = ArticleStatus.DRAFT;
@@ -81,20 +80,43 @@ public class ArticleService {
 
         Article saved = articleRepository.save(article);
 
-        if (dto.getTags() != null && !dto.getTags().isEmpty()) {
-            for (String tagName : dto.getTags()) {
-                Tag tag = null;
-                try {
-                    tag = tagService.getTagByName(tagName);
-                } catch (BusinessException e) {
-                    tag = tagService.createTag(tagName);
+        // 仅发布状态才增加分类/标签的计数
+        if (status == ArticleStatus.PUBLISHED) {
+            if (dto.getCategoryId() != null && !dto.getCategoryId().isBlank()) {
+                categoryService.incrementArticleCount(dto.getCategoryId());
+            }
+            if (dto.getTags() != null && !dto.getTags().isEmpty()) {
+                for (String tagName : dto.getTags()) {
+                    Tag tag = null;
+                    try {
+                        tag = tagService.getTagByName(tagName);
+                    } catch (BusinessException e) {
+                        tag = tagService.createTag(tagName);
+                    }
+                    ArticleTagMap map = ArticleTagMap.builder()
+                            .articleId(saved.getId())
+                            .tagId(tag.getId())
+                            .build();
+                    articleTagMapRepository.save(map);
+                    tagService.incrementArticleCount(tag.getId());
                 }
-                ArticleTagMap map = ArticleTagMap.builder()
-                        .articleId(saved.getId())
-                        .tagId(tag.getId())
-                        .build();
-                articleTagMapRepository.save(map);
-                tagService.incrementArticleCount(tag.getId());
+            }
+        } else {
+            // 草稿也保存标签映射，但不增加计数
+            if (dto.getTags() != null && !dto.getTags().isEmpty()) {
+                for (String tagName : dto.getTags()) {
+                    Tag tag = null;
+                    try {
+                        tag = tagService.getTagByName(tagName);
+                    } catch (BusinessException e) {
+                        tag = tagService.createTag(tagName);
+                    }
+                    ArticleTagMap map = ArticleTagMap.builder()
+                            .articleId(saved.getId())
+                            .tagId(tag.getId())
+                            .build();
+                    articleTagMapRepository.save(map);
+                }
             }
         }
 
@@ -171,6 +193,30 @@ public class ArticleService {
         }
         if (dto.getStatus() != null) {
             ArticleStatus newStatus = ArticleStatus.valueOf(dto.getStatus().toUpperCase());
+            ArticleStatus oldStatus = article.getStatus();
+            if (oldStatus != ArticleStatus.PUBLISHED && newStatus == ArticleStatus.PUBLISHED) {
+                // 草稿 → 发布：增加分类和标签计数
+                if (article.getCategoryId() != null && !article.getCategoryId().isBlank()) {
+                    categoryService.incrementArticleCount(article.getCategoryId());
+                }
+                for (String tagName : article.getTags()) {
+                    try {
+                        Tag tag = tagService.getTagByName(tagName);
+                        tagService.incrementArticleCount(tag.getId());
+                    } catch (BusinessException ignored) {}
+                }
+            } else if (oldStatus == ArticleStatus.PUBLISHED && newStatus != ArticleStatus.PUBLISHED) {
+                // 发布 → 非发布：减少分类和标签计数
+                if (article.getCategoryId() != null && !article.getCategoryId().isBlank()) {
+                    categoryService.decrementArticleCount(article.getCategoryId());
+                }
+                for (String tagName : article.getTags()) {
+                    try {
+                        Tag tag = tagService.getTagByName(tagName);
+                        tagService.decrementArticleCount(tag.getId());
+                    } catch (BusinessException ignored) {}
+                }
+            }
             article.setStatus(newStatus);
             if (newStatus == ArticleStatus.PUBLISHED && article.getPublishedAt() == null) {
                 article.setPublishedAt(LocalDateTime.now());

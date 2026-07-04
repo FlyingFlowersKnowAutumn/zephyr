@@ -1,23 +1,59 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
 import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import ArticleCard from '@/components/common/ArticleCard.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import { RouterLink } from 'vue-router'
 
 const emit = defineEmits(['open-search'])
 
+const route = useRoute()
 const articleStore = useArticleStore()
 const authStore = useAuthStore()
 const articles = ref<any[]>([])
 const loading = ref(true)
+const currentPage = ref(1)
+const totalArticles = ref(0)
+const pageSize = 10
+const articlesSection = ref<HTMLElement>()
 
-onMounted(async () => {
-  const result = await articleStore.fetchArticles({ page: 1, size: 4, status: 'PUBLISHED' })
+async function loadPage(page: number, scroll: boolean = true) {
+  loading.value = true
+  currentPage.value = page
+  const result = await articleStore.fetchArticles({ page, size: pageSize, status: 'PUBLISHED' })
   articles.value = result.articles
+  totalArticles.value = result.total
   loading.value = false
+  if (scroll) {
+    await nextTick()
+    articlesSection.value?.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
+function resetToFirstPage() {
+  if (currentPage.value !== 1) {
+    loadPage(1, false)
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+onMounted(() => {
+  loadPage(1, false)
+  window.addEventListener('home-reset', resetToFirstPage)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('home-reset', resetToFirstPage)
+})
+
+watch(() => route.path, (path) => {
+  if (path === '/' && currentPage.value !== 1) {
+    loadPage(1, false)
+  }
 })
 </script>
 
@@ -25,7 +61,7 @@ onMounted(async () => {
   <LayoutWrapper heroTitle="微风" heroSubtitle="La brise écrit mes pensées" heroImage="/Note/wallhaven-w5lr6x_2560x1440.png" :showSidebar="true" @open-search="emit('open-search')">
     <SeoHead />
 
-    <section class="home-content">
+    <section ref="articlesSection" class="home-content">
 
       <div v-if="loading" class="loading">
         <div class="loading-spinner"></div>
@@ -41,17 +77,22 @@ onMounted(async () => {
       </div>
 
       <div v-else class="articles-list">
-        <ArticleCard 
-          v-for="(article, index) in articles" 
-          :key="article.id" 
+        <ArticleCard
+          v-for="(article, index) in articles"
+          :key="article.id"
           :article="article"
           :index="index"
         />
       </div>
 
-      <div v-if="articles.length > 0 && authStore.user?.role === 'blogger'" class="view-more-section">
-        <RouterLink to="/write" class="write-btn">开始写作</RouterLink>
-      </div>
+      <Pagination
+        v-if="totalArticles > pageSize"
+        :current="currentPage"
+        :total="totalArticles"
+        :size="pageSize"
+        @change="loadPage"
+      />
+
     </section>
   </LayoutWrapper>
 </template>
@@ -59,6 +100,7 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .home-content {
   width: 100%;
+  scroll-margin-top: 2rem;
 }
 
 .loading {

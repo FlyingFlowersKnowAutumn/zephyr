@@ -13,6 +13,13 @@ const isVisible = ref(true)
 const authStore = useAuthStore()
 const router = useRouter()
 const showUserMenu = ref(false)
+
+function goHome(e: MouseEvent) {
+  if (router.currentRoute.value.path === '/') {
+    e.preventDefault()
+    window.dispatchEvent(new CustomEvent('home-reset'))
+  }
+}
 let hideMenuTimer: ReturnType<typeof setTimeout> | null = null
 
 function handleMouseEnter() {
@@ -74,6 +81,13 @@ function handleSearch() {
       
       <div class="right-section">
         <nav class="nav">
+          <div v-if="authStore.user?.role === 'blogger'" class="nav-item">
+            <RouterLink to="/write">
+              <span class="nav-emoji">✍️</span>
+              <span class="link-text">写作</span>
+              <span class="underline"></span>
+            </RouterLink>
+          </div>
           <div class="nav-item">
             <div class="search-icon" @click="handleSearch">
               <span class="nav-emoji">🔍</span>
@@ -82,7 +96,7 @@ function handleSearch() {
             </div>
           </div>
           <div class="nav-item">
-            <RouterLink to="/">
+            <RouterLink to="/" @click="goHome">
               <span class="nav-emoji">🏠</span>
               <span class="link-text">首页</span>
               <span class="underline"></span>
@@ -188,7 +202,6 @@ function handleSearch() {
   &.scrolled {
     background: rgba(255, 255, 255, 0.75);
     backdrop-filter: blur(12px);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08);
   }
 }
 

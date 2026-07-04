@@ -1,41 +1,187 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import * as reactionApi from '@/api/reaction'
+import * as commentApi from '@/api/comment'
 import * as favoriteApi from '@/api/favorite'
+import * as reactionApi from '@/api/reaction'
+import { uploadImage } from '@/api/upload'
+import { ElMessage } from 'element-plus'
+import type { CommentDTO } from '@/types'
 
 const props = defineProps<{
   articleId: string
+  articleAuthorId?: string
   articleTitle?: string
   articleContent?: string
 }>()
 
 const authStore = useAuthStore()
+const currentUserId = ref(authStore.user?.userId || '')
+
+const comments = ref<CommentDTO[]>([])
+const commentPage = ref(0)
+const hasMoreComments = ref(true)
+const loadingComments = ref(false)
+const loadingMore = ref(false)
+
+const commentText = ref('')
+const commentImages = ref<string[]>([])
+const uploadingImage = ref(false)
+const submittingComment = ref(false)
 
 const liked = ref(false)
 const likeCount = ref(0)
+const commentCount = ref(0)
 const favorited = ref(false)
 const favoriteCount = ref(0)
 
-const commentText = ref('')
-const comments = ref<Array<{ id: string; content: string; author: string; createdAt: string }>>([])
+const loadedReplies = ref<Record<string, CommentDTO[]>>({})
+const replyVisible = ref<Record<string, number>>({})
+const loadingReplies = ref<Record<string, boolean>>({})
+
+const replyingTo = ref<{ commentId: string; parentUserName?: string } | null>(null)
+const replyText = ref('')
+const replyImages = ref<string[]>([])
+const uploadingReplyImage = ref(false)
+const submittingReply = ref(false)
+
+const commentSentinel = ref<HTMLElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
 
 onMounted(async () => {
-  const [reactionResult, favoriteResult] = await Promise.all([
-    reactionApi.getReactionStatus(props.articleId),
-    favoriteApi.getFavoriteStatus(props.articleId)
+  const [commentResult, favoriteResult, reactionResult] = await Promise.all([
+    commentApi.getComments(props.articleId, 0, 20),
+    favoriteApi.getFavoriteStatus(props.articleId),
+    reactionApi.getReactionStatus(props.articleId)
   ])
-  
-  if (reactionResult.code === 0 && reactionResult.data) {
-    liked.value = reactionResult.data.liked
-    likeCount.value = reactionResult.data.likeCount
+
+  if (commentResult.code === 0 && commentResult.data) {
+    comments.value = commentResult.data.content
+    hasMoreComments.value = commentResult.data.totalPages > 1
+    commentPage.value = 0
+    commentCount.value = commentResult.data.totalElements
   }
-  
+
   if (favoriteResult.code === 0 && favoriteResult.data) {
     favorited.value = favoriteResult.data.favorited
     favoriteCount.value = favoriteResult.data.favoriteCount
   }
+
+  if (reactionResult.code === 0 && reactionResult.data) {
+    liked.value = reactionResult.data.liked
+    likeCount.value = reactionResult.data.likeCount
+  }
+
+  await nextTick()
+  setupLoadMoreObserver()
 })
+
+onUnmounted(() => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
+})
+
+function setupLoadMoreObserver() {
+  if (loadMoreObserver) loadMoreObserver.disconnect()
+  if (!commentSentinel.value) return
+
+  loadMoreObserver = new IntersectionObserver(
+    async (entries) => {
+      if (entries[0].isIntersecting && hasMoreComments.value && !loadingMore.value) {
+        await loadMoreComments()
+      }
+    },
+    { threshold: 0.1 }
+  )
+  loadMoreObserver.observe(commentSentinel.value)
+}
+
+async function loadMoreComments() {
+  if (loadingMore.value || !hasMoreComments.value) return
+  loadingMore.value = true
+  try {
+    const nextPage = commentPage.value + 1
+    const result = await commentApi.getComments(props.articleId, nextPage, 20)
+    if (result.code === 0 && result.data) {
+      comments.value.push(...result.data.content)
+      commentPage.value = nextPage
+      hasMoreComments.value = result.data.number + 1 < result.data.totalPages
+    }
+  } catch {
+    // silent
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+async function handleUploadImage(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploadingImage.value = true
+  try {
+    const url = await uploadImage(file)
+    if (url) commentImages.value.push(url)
+  } catch {
+    ElMessage.error('图片上传失败')
+  } finally {
+    uploadingImage.value = false
+    input.value = ''
+  }
+}
+
+function insertEmoji() {
+  commentText.value += '😊'
+}
+
+async function submitComment() {
+  if (!commentText.value.trim() || submittingComment.value) return
+  submittingComment.value = true
+  try {
+    const result = await commentApi.createComment({
+      articleId: props.articleId,
+      content: commentText.value,
+      images: commentImages.value.length ? commentImages.value : undefined
+    })
+    if (result.code === 0 && result.data) {
+      comments.value.unshift(result.data)
+      commentText.value = ''
+      commentImages.value = []
+      ElMessage.success('评论已提交')
+    } else {
+      ElMessage.error(result.message || '评论失败')
+    }
+  } catch {
+    ElMessage.error('评论失败')
+  } finally {
+    submittingComment.value = false
+  }
+}
+
+async function handleDeleteComment(id: string) {
+  try {
+    const result = await commentApi.deleteComment(id)
+    if (result.code === 0) {
+      comments.value = comments.value.filter((c) => c.id !== id)
+      delete loadedReplies.value[id]
+      ElMessage.success('评论已删除')
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
+
+function canDelete(comment: CommentDTO): boolean {
+  return comment.userId === currentUserId.value || authStore.user?.role === 'blogger'
+}
+
+function isAuthor(comment: CommentDTO): boolean {
+  return comment.userId === props.articleAuthorId
+}
 
 async function toggleLike() {
   if (!authStore.isLoggedIn) return
@@ -54,17 +200,105 @@ async function toggleFavorite() {
     favoriteCount.value = result.data.favoriteCount
   }
 }
-function submitComment() {
-  if (!commentText.value.trim() || !authStore.isLoggedIn) return
-  
-  comments.value.unshift({
-    id: Date.now().toString(),
-    content: commentText.value,
-    author: authStore.user?.username || '用户',
-    createdAt: new Date().toLocaleString('zh-CN')
-  })
-  commentText.value = ''
+
+// ========== 回复相关 ==========
+
+async function loadReplies(commentId: string) {
+  if (loadedReplies.value[commentId]) return
+  loadingReplies.value[commentId] = true
+  try {
+    const result = await commentApi.getReplies(commentId)
+    if (result.code === 0 && result.data) {
+      loadedReplies.value[commentId] = result.data
+      replyVisible.value[commentId] = Math.min(5, result.data.length)
+    }
+  } catch {
+    // silent
+  } finally {
+    loadingReplies.value[commentId] = false
+  }
 }
+
+function showMoreReplies(commentId: string) {
+  const replies = loadedReplies.value[commentId]
+  if (!replies) return
+  replyVisible.value[commentId] = Math.min((replyVisible.value[commentId] || 5) + 10, replies.length)
+}
+
+function collapseReplies(commentId: string) {
+  replyVisible.value[commentId] = 5
+}
+
+function startReply(commentId: string, parentUserName?: string) {
+  replyingTo.value = { commentId, parentUserName }
+  replyText.value = ''
+  replyImages.value = []
+}
+
+function cancelReply() {
+  replyingTo.value = null
+}
+
+async function handleReplyUploadImage(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploadingReplyImage.value = true
+  try {
+    const url = await uploadImage(file)
+    if (url) replyImages.value.push(url)
+  } catch {
+    ElMessage.error('图片上传失败')
+  } finally {
+    uploadingReplyImage.value = false
+    input.value = ''
+  }
+}
+
+function insertReplyEmoji() {
+  replyText.value += '😊'
+}
+
+async function submitReply() {
+  if (!replyText.value.trim() || !replyingTo.value || submittingReply.value) return
+  submittingReply.value = true
+  try {
+    const result = await commentApi.createComment({
+      articleId: props.articleId,
+      parentId: replyingTo.value.commentId,
+      content: replyText.value,
+      images: replyImages.value.length ? replyImages.value : undefined
+    })
+    if (result.code === 0 && result.data) {
+      const reply = result.data
+      const parentId = replyingTo.value.commentId
+      if (!loadedReplies.value[parentId]) {
+        loadedReplies.value[parentId] = []
+      }
+      loadedReplies.value[parentId].push(reply)
+      replyVisible.value[parentId] = Math.min(
+        (replyVisible.value[parentId] || 5),
+        loadedReplies.value[parentId].length
+      )
+      replyingTo.value = null
+      ElMessage.success('回复已提交')
+    } else {
+      ElMessage.error(result.message || '回复失败')
+    }
+  } catch {
+    ElMessage.error('回复失败')
+  } finally {
+    submittingReply.value = false
+  }
+}
+
+function getReplyDisplayName(reply: CommentDTO, allReplies: CommentDTO[]): string {
+  if (!reply.parentId) return reply.userName || '匿名'
+  const parent = allReplies.find((r) => r.id === reply.parentId)
+  if (!parent || parent.id === reply.parentId) return reply.userName || '匿名'
+  return `${reply.userName || '匿名'} → ${parent.userName || '匿名'}`
+}
+
 function downloadMarkdown() {
   const content = `# ${props.articleTitle || '文章标题'}\n\n${props.articleContent || ''}`
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
@@ -77,35 +311,48 @@ function downloadMarkdown() {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}天前`
+  return date.toLocaleDateString('zh-CN')
+}
 </script>
 
 <template>
   <div class="action-panel">
+    <!-- 评论区 -->
     <div class="comment-section">
-      <div class="comment-header">
-        <div class="comment-title-wrapper">
-          <svg class="comment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div class="comment-section-header">
+        <div class="comment-header-left">
+          <svg class="comment-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          <span class="comment-title">评论</span>
+          <span class="comment-section-title">评论</span>
+          <span class="comment-section-count">{{ commentCount }}</span>
         </div>
-        
-        <div class="comment-actions">
-          <button class="action-btn like-btn" :class="{ liked }" :disabled="!authStore.isLoggedIn" @click="toggleLike">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="comment-header-actions">
+          <button class="action-pill like-pill" :class="{ liked }" :disabled="!authStore.isLoggedIn" @click="toggleLike">
+            <svg viewBox="0 0 24 24" :fill="liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
-            <span class="action-count">{{ likeCount }}</span>
+            <span class="pill-count">{{ likeCount }}</span>
           </button>
-          
-          <button class="action-btn favorite-btn" :class="{ favorited }" :disabled="!authStore.isLoggedIn" @click="toggleFavorite">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="action-pill favorite-pill" :class="{ favorited }" :disabled="!authStore.isLoggedIn" @click="toggleFavorite">
+            <svg viewBox="0 0 24 24" :fill="favorited ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
-            <span class="action-count">{{ favoriteCount }}</span>
+            <span class="pill-count">{{ favoriteCount }}</span>
           </button>
-          
-          <button class="action-btn download-btn" @click="downloadMarkdown">
+          <button class="action-pill download-pill" @click="downloadMarkdown">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -114,28 +361,144 @@ function downloadMarkdown() {
           </button>
         </div>
       </div>
-      
-      <div class="comment-list">
-        <div v-for="comment in comments" :key="comment.id" class="comment-item">
-          <span class="comment-author">{{ comment.author }}</span>
-          <span class="comment-content">{{ comment.content }}</span>
-          <span class="comment-time">{{ comment.createdAt }}</span>
-        </div>
-        <div v-if="comments.length === 0" class="no-comments">
-          暂无评论
-        </div>
-      </div>
-      
+
+      <!-- 评论输入区域 -->
       <div class="comment-input-area">
-        <textarea 
-          v-model="commentText" 
-          class="comment-input" 
+        <textarea
+          v-model="commentText"
+          class="comment-input"
           placeholder="写下你的评论..."
           rows="3"
         ></textarea>
-        <button class="comment-submit" :disabled="!commentText.trim()" @click="submitComment">
-          发表
-        </button>
+        <div v-if="commentImages.length" class="preview-images">
+          <div v-for="(img, i) in commentImages" :key="i" class="preview-image-wrap">
+            <img :src="img" alt="preview" />
+            <button class="remove-img-btn" @click="commentImages.splice(i, 1)">×</button>
+          </div>
+        </div>
+        <div class="input-toolbar">
+          <div class="toolbar-icons">
+            <label class="toolbar-icon-btn" title="图片">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <input type="file" accept="image/*" hidden @change="handleUploadImage" :disabled="uploadingImage" />
+            </label>
+            <button class="toolbar-icon-btn" title="表情" @click="insertEmoji">😊</button>
+          </div>
+          <button class="comment-submit-btn" :disabled="!commentText.trim() || submittingComment" @click="submitComment">
+            {{ submittingComment ? '提交中...' : '发布评论' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 评论列表 -->
+      <div class="comment-list">
+        <div v-if="comments.length === 0 && !loadingComments" class="no-comments">
+          <span class="no-comments-icon">💬</span>
+          <span>还没有评论，来说两句吧</span>
+        </div>
+
+        <div v-for="comment in comments" :key="comment.id" class="comment-item">
+          <div class="comment-avatar">{{ (comment.userName || '匿').charAt(0).toUpperCase() }}</div>
+          <div class="comment-body">
+            <div class="comment-meta">
+              <span class="comment-username">{{ comment.userName || '匿名' }}</span>
+              <span v-if="isAuthor(comment)" class="author-badge">作者</span>
+              <span class="comment-time">{{ formatTime(comment.createdAt) }}</span>
+            </div>
+            <div class="comment-content">{{ comment.content }}</div>
+            <div v-if="comment.images && comment.images.length" class="comment-images">
+              <img v-for="(img, i) in comment.images" :key="i" :src="img" alt="comment-image" />
+            </div>
+            <div class="comment-item-actions">
+              <button class="reply-btn" @click="startReply(comment.id)">回复</button>
+              <button v-if="canDelete(comment)" class="delete-btn" @click="handleDeleteComment(comment.id)">删除</button>
+            </div>
+
+            <!-- 回复区域 -->
+            <div v-if="loadedReplies[comment.id] && loadedReplies[comment.id].length" class="replies-section">
+              <div
+                v-for="(reply, ri) in loadedReplies[comment.id].slice(0, replyVisible[comment.id] || 0)"
+                :key="reply.id"
+                class="reply-item"
+              >
+                <div class="reply-avatar">{{ (reply.userName || '匿').charAt(0).toUpperCase() }}</div>
+                <div class="reply-body">
+                  <div class="reply-meta">
+                    <span class="reply-username">{{ getReplyDisplayName(reply, loadedReplies[comment.id]) }}</span>
+                    <span v-if="isAuthor(reply)" class="author-badge">作者</span>
+                    <span class="reply-time">{{ formatTime(reply.createdAt) }}</span>
+                  </div>
+                  <div class="reply-content">{{ reply.content }}</div>
+                  <div v-if="reply.images && reply.images.length" class="reply-images">
+                    <img v-for="(img, i) in reply.images" :key="i" :src="img" alt="reply-image" />
+                  </div>
+                  <div class="reply-item-actions">
+                    <button class="reply-btn" @click="startReply(comment.id, reply.userName)">回复</button>
+                    <button v-if="canDelete(reply)" class="delete-btn" @click="handleDeleteComment(reply.id)">删除</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="replies-toggle">
+                <span
+                  v-if="loadedReplies[comment.id].length > (replyVisible[comment.id] || 5)"
+                  class="toggle-link"
+                  @click="showMoreReplies(comment.id)"
+                >展开更多回复</span>
+                <span
+                  v-if="(replyVisible[comment.id] || 0) > 5"
+                  class="toggle-link"
+                  @click="collapseReplies(comment.id)"
+                >收起</span>
+              </div>
+            </div>
+
+            <div v-if="!loadedReplies[comment.id] && !loadingReplies[comment.id]" class="replies-toggle">
+              <span class="toggle-link" @click="loadReplies(comment.id)">查看回复</span>
+            </div>
+            <div v-if="loadingReplies[comment.id]" class="replies-loading">加载中...</div>
+
+            <!-- 回复弹窗 -->
+            <div v-if="replyingTo?.commentId === comment.id" class="reply-dialog">
+              <div class="reply-dialog-header">
+                <span v-if="replyingTo.parentUserName">回复 @{{ replyingTo.parentUserName }}</span>
+                <span v-else>发表回复</span>
+                <button class="reply-dialog-close" @click="cancelReply">×</button>
+              </div>
+              <textarea v-model="replyText" class="reply-textarea" placeholder="写下你的回复..." rows="2"></textarea>
+              <div v-if="replyImages.length" class="preview-images">
+                <div v-for="(img, i) in replyImages" :key="i" class="preview-image-wrap">
+                  <img :src="img" alt="preview" />
+                  <button class="remove-img-btn" @click="replyImages.splice(i, 1)">×</button>
+                </div>
+              </div>
+              <div class="reply-dialog-toolbar">
+                <div class="toolbar-icons">
+                  <label class="toolbar-icon-btn" title="图片">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <input type="file" accept="image/*" hidden @change="handleReplyUploadImage" :disabled="uploadingReplyImage" />
+                  </label>
+                  <button class="toolbar-icon-btn" title="表情" @click="insertReplyEmoji">😊</button>
+                </div>
+                <button class="reply-submit-btn" :disabled="!replyText.trim() || submittingReply" @click="submitReply">
+                  {{ submittingReply ? '提交中...' : '提交回复' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="hasMoreComments" ref="commentSentinel" class="comment-sentinel">
+          <span v-if="loadingMore">加载更多评论...</span>
+        </div>
       </div>
     </div>
   </div>
@@ -144,240 +507,619 @@ function downloadMarkdown() {
 <style lang="scss" scoped>
 .action-panel {
   width: 100%;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
 }
 
-.comment-section {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 1rem 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.comment-header {
+// ========== 评论区头部 ==========
+.comment-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
-.comment-title-wrapper {
+.comment-header-left {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.comment-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--color-accent);
-}
-
-.comment-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.comment-actions {
+.comment-header-actions {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 0.5rem;
 }
 
-.action-btn {
+// ========== 操作按钮 ==========
+.action-pill {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  background: none;
-  border: none;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: 0.825rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.25s ease;
-  padding: 0.375rem 0.75rem;
-  border-radius: 6px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 
   svg {
-    width: 18px;
-    height: 18px;
-    stroke: var(--color-text-secondary);
-    fill: transparent;
-    transition: all 0.25s ease;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    transition: transform 0.25s ease;
   }
 
-  .action-count {
-    font-size: 0.8rem;
-    color: var(--color-text-secondary);
-    font-weight: 600;
-    min-width: 1.25rem;
+  .pill-count {
+    font-weight: 700;
+    font-size: 0.75rem;
+    min-width: 1.1rem;
     text-align: center;
   }
 
   &:hover:not(:disabled) {
-    background: var(--color-bg-secondary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
   }
 }
 
-.like-btn {
-  &:hover:not(:disabled) svg {
-    stroke: #ef4444;
+.like-pill {
+  &:hover:not(:disabled) {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.05);
+    .pill-count { background: rgba(239, 68, 68, 0.1); }
   }
 
   &.liked {
-    svg {
-      stroke: #ef4444;
-      fill: #ef4444;
-    }
-
-    .action-count {
-      color: #ef4444;
-    }
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.08);
+    .pill-count { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    svg { fill: #ef4444; }
   }
 }
 
-.favorite-btn {
-  &:hover:not(:disabled) svg {
-    stroke: #f59e0b;
+.favorite-pill {
+  &:hover:not(:disabled) {
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.05);
+    .pill-count { background: rgba(245, 158, 11, 0.1); }
   }
 
   &.favorited {
-    svg {
-      stroke: #f59e0b;
-      fill: #f59e0b;
-    }
-
-    .action-count {
-      color: #f59e0b;
-    }
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.08);
+    .pill-count { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    svg { fill: #f59e0b; }
   }
 }
 
-.download-btn {
-  &:hover:not(:disabled) svg {
-    stroke: var(--color-accent);
-  }
-}
-
-.comment-list {
-  max-height: 200px;
-  overflow-y: auto;
-  margin-bottom: 1rem;
-  padding-right: 0.5rem;
-}
-
-.comment-item {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--color-border);
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  .comment-author {
-    font-size: 0.8rem;
-    font-weight: 600;
+.download-pill {
+  &:hover:not(:disabled) {
     color: var(--color-accent);
-    margin-right: 0.5rem;
-  }
-
-  .comment-content {
-    font-size: 0.875rem;
-    color: var(--color-text-primary);
-    display: block;
-    margin-top: 0.25rem;
-  }
-
-  .comment-time {
-    font-size: 0.7rem;
-    color: var(--color-text-secondary);
-    display: block;
-    margin-top: 0.25rem;
+    border-color: rgba(0, 212, 255, 0.3);
+    background: rgba(0, 212, 255, 0.05);
+    .pill-count { background: rgba(0, 212, 255, 0.08); }
   }
 }
 
-.no-comments {
-  text-align: center;
+// ========== 评论区 ==========
+.comment-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.comment-section-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.comment-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.comment-section-count {
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--color-text-secondary);
-  font-size: 0.875rem;
-  padding: 1.5rem 0;
+  background: var(--color-bg-primary);
+  padding: 2px 10px;
+  border-radius: 10px;
 }
 
+// ========== 评论输入 ==========
 .comment-input-area {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .comment-input {
   width: 100%;
-  padding: 0.75rem;
-  font-size: 0.875rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.9rem;
   color: var(--color-text-primary);
   background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  outline: none;
+  resize: none;
+  box-sizing: border-box;
+  line-height: 1.6;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+  }
+
+  &::placeholder { color: var(--color-text-secondary); opacity: 0.6; }
+}
+
+.preview-images {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.preview-image-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .remove-img-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+
+    &:hover { background: #ef4444; }
+  }
+}
+
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.toolbar-icons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.toolbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+  background: transparent;
+  padding: 0;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-secondary);
+  }
+
+  &:hover { background: var(--color-bg-primary); }
+}
+
+.comment-submit-btn {
+  padding: 0.55rem 1.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+}
+
+// ========== 评论列表 ==========
+.comment-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.no-comments {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 3rem 2rem;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+
+  .no-comments-icon {
+    font-size: 2rem;
+    opacity: 0.5;
+  }
+}
+
+.comment-item {
+  display: flex;
+  gap: 0.875rem;
+  padding: 1.125rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.15s;
+
+  &:last-child { border-bottom: none; }
+
+  &:hover { background: var(--color-bg-secondary); }
+}
+
+.comment-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.comment-username {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.author-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 0.7rem;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.comment-time {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+.comment-content {
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  line-height: 1.65;
+  margin-bottom: 0.5rem;
+  word-break: break-word;
+}
+
+.comment-images {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+
+  img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    transition: transform 0.2s;
+
+    &:hover { transform: scale(1.05); }
+  }
+}
+
+.comment-item-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.reply-btn {
+  padding: 3px 12px;
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  background: rgba(0, 212, 255, 0.08);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+
+  &:hover { background: rgba(0, 212, 255, 0.15); }
+}
+
+.delete-btn {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+}
+
+// ========== 回复区域 ==========
+.replies-section {
+  margin-top: 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid rgba(99, 102, 241, 0.2);
+  border-radius: 0 6px 6px 0;
+}
+
+.reply-item {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+
+  &:first-child { padding-top: 0; }
+}
+
+.reply-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.reply-body { flex: 1; min-width: 0; }
+
+.reply-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.reply-username {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.reply-time {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+.reply-content {
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  line-height: 1.55;
+  margin-bottom: 0.375rem;
+}
+
+.reply-images {
+  display: flex;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+
+  img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+  }
+}
+
+.reply-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.replies-toggle {
+  padding: 0.375rem 0;
+  display: flex;
+  gap: 1rem;
+}
+
+.toggle-link {
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.2s;
+
+  &:hover { opacity: 0.8; }
+}
+
+.replies-loading {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  padding: 0.5rem 0;
+}
+
+// ========== 回复弹窗 ==========
+.reply-dialog {
+  margin-top: 0.75rem;
+  padding: 0.875rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.reply-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.reply-dialog-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+}
+
+.reply-textarea {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   outline: none;
   resize: none;
   box-sizing: border-box;
   line-height: 1.5;
+  transition: border-color 0.2s;
 
-  &:focus {
-    border-color: var(--color-accent);
-  }
-
-  &::placeholder {
-    color: var(--color-text-secondary);
-  }
+  &:focus { border-color: var(--color-accent); }
 }
 
-.comment-submit {
-  align-self: flex-end;
-  padding: 0.5rem 1.25rem;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: white;
-  background: var(--color-accent);
+.reply-dialog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.reply-submit-btn {
+  padding: 0.4rem 1.125rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: all 0.2s;
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-  }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 }
 
+.comment-sentinel {
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+// ========== 响应式 ==========
 @media (max-width: 768px) {
-  .comment-section {
-    padding: 0.75rem 1rem;
+  .comment-header-actions {
+    gap: 0.375rem;
   }
 
-  .comment-actions {
-    gap: 1rem;
-  }
-
-  .action-btn {
+  .action-pill {
     gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.75rem;
+    border-radius: 16px;
 
-    svg {
-      width: 14px;
-      height: 14px;
-    }
-
-    .action-count {
-      font-size: 0.7rem;
-    }
+    svg { width: 14px; height: 14px; }
+    .pill-count { font-size: 0.7rem; }
   }
+
+  .comment-section-header { padding: 0.875rem 1rem; }
+  .comment-input-area { padding: 1rem; }
+  .comment-item { padding: 1rem; gap: 0.625rem; }
+  .comment-avatar { width: 32px; height: 32px; font-size: 0.75rem; }
 }
 </style>

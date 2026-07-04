@@ -4,6 +4,11 @@ import { incrementViewCount } from '@/api/site'
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.path === '/') return { top: 0 }
+    return { top: 0 }
+  },
   routes: [
     {
       path: '/login',

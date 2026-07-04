@@ -8,14 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.UUID;
 
-public interface CommentRepository extends JpaRepository<Comment, String> {
+public interface CommentRepository extends JpaRepository<Comment, UUID> {
 
     @Query("SELECT c FROM Comment c WHERE c.articleId = :articleId AND c.parentId IS NULL AND c.deletedAt IS NULL ORDER BY c.createdAt DESC")
-    Page<Comment> findTopLevelByArticleId(@Param("articleId") String articleId, Pageable pageable);
+    Page<Comment> findTopLevelByArticleId(@Param("articleId") UUID articleId, Pageable pageable);
 
     @Query("SELECT c FROM Comment c WHERE c.parentId = :parentId AND c.deletedAt IS NULL ORDER BY c.createdAt ASC")
-    List<Comment> findRepliesByParentId(@Param("parentId") String parentId);
+    List<Comment> findRepliesByParentId(@Param("parentId") UUID parentId);
 
-    long countByArticleIdAndDeletedAtIsNull(String articleId);
+    @Query("SELECT COUNT(c) FROM Comment c WHERE c.articleId = :articleId AND c.deletedAt IS NULL")
+    long countByArticleIdAndDeletedAtIsNull(@Param("articleId") UUID articleId);
 }

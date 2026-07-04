@@ -89,43 +89,49 @@ onMounted(async () => {
               <span>新建</span>
             </button>
           </div>
-          <div 
-            @click="selectedCategory = ''"
-            class="category-item"
-            :class="{ active: !selectedCategory }"
-          >
-            <span class="category-dot"></span>
-            <span class="category-name">全部文章</span>
-            <span class="category-count">{{ articles.length }}</span>
+          <div class="category-item-wrapper">
+            <div
+              @click="selectedCategory = ''"
+              class="category-item"
+              :class="{ active: !selectedCategory }"
+            >
+              <span class="category-dot"></span>
+              <span class="category-name">全部文章</span>
+              <span class="category-right">
+                <span class="category-count">{{ articles.length }}</span>
+              </span>
+            </div>
           </div>
           <div v-if="categories.length === 0" class="category-empty">
             还没有分类
           </div>
-          <div 
-            v-for="category in categories" 
+          <div
+            v-for="category in categories"
             :key="category.id"
             class="category-item-wrapper"
           >
-            <div 
+            <div
               @click="selectedCategory = category.name"
               class="category-item"
               :class="{ active: selectedCategory === category.name }"
             >
               <span class="category-dot"></span>
               <span class="category-name">{{ category.name }}</span>
-              <span class="category-count">{{ category.articleCount || 0 }}</span>
+              <span class="category-right">
+                <span class="category-count">{{ category.articleCount || 0 }}</span>
+                <button
+                  v-if="isBlogger"
+                  @click.stop="deleteCategory(category.id)"
+                  class="delete-btn"
+                  title="删除分类"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </span>
             </div>
-            <button 
-              v-if="isBlogger" 
-              @click.stop="deleteCategory(category.id)" 
-              class="delete-btn"
-              title="删除分类"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
           </div>
         </div>
 
@@ -233,26 +239,39 @@ onMounted(async () => {
 }
 
 .category-item-wrapper {
+  // container only, no extra styles needed
+}
+
+.category-right {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .delete-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.2rem;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding: 0;
+  margin: 0;
   background: none;
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
   border-radius: 4px;
-  opacity: 0;
-  transition: all var(--transition-default);
+  transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin-left 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 
   .category-item-wrapper:hover & {
+    width: 20px;
+    height: 20px;
     opacity: 1;
+    padding: 0.2rem;
+    margin-left: 0.25rem;
   }
 
   &:hover {

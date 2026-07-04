@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import Header from './Header.vue'
 import Sidebar from './Sidebar.vue'
+import FloatingActions from './FloatingActions.vue'
 
 interface Props {
   showSidebar?: boolean
@@ -247,6 +248,8 @@ function scrollDown() {
         </main>
       </div>
     </div>
+
+    <FloatingActions />
 
     <footer class="footer">
       <div class="footer-inner">

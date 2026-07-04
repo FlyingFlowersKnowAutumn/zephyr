@@ -64,6 +64,17 @@ const sortedTags = computed(() => {
   return [...tags.value].sort((a, b) => (b.articleCount || 0) - (a.articleCount || 0))
 })
 
+const tagLengthRange = computed(() => {
+  const lengths = tags.value.map(t => t.name.length)
+  return { min: Math.min(...lengths, 0), max: Math.max(...lengths, 0) }
+})
+
+function getTagSize(name: string): number {
+  const { min, max } = tagLengthRange.value
+  if (max === min) return 0.95
+  return 0.8 + ((name.length - min) / (max - min)) * 0.3
+}
+
 onMounted(async () => {
   try {
     const [tagResult, articleResult] = await Promise.all([
@@ -120,12 +131,12 @@ onMounted(async () => {
               class="tag-wrapper-item"
               :class="{ 'tag-cloud-hover': hoveredTag !== '' && hoveredTag !== tag.name }"
             >
-              <button 
+              <button
                 @click="selectedTag = selectedTag === tag.name ? '' : tag.name"
                 @mouseenter="hoveredTag = tag.name"
                 class="tag"
                 :class="{ active: selectedTag === tag.name }"
-                :style="{ '--tag-color': getTagColor(tag.name) }"
+                :style="{ '--tag-color': getTagColor(tag.name), fontSize: `${getTagSize(tag.name)}rem` }"
               >
                 <span class="tag-name">{{ tag.name }}</span>
                 <span class="tag-count">{{ tag.articleCount || 0 }}</span>
@@ -304,7 +315,8 @@ onMounted(async () => {
 .tag-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  justify-content: center;
+  gap: 0.65rem;
 }
 
 .tag-empty {
@@ -382,7 +394,7 @@ onMounted(async () => {
 }
 
 .tag-count {
-  font-size: 0.7rem;
+  font-size: 0.8em;
   padding: 0.1rem 0.4rem;
   background: rgba(0, 0, 0, 0.1);
   border-radius: 10px;

@@ -73,8 +73,9 @@ export const useArticleStore = defineStore('article', () => {
       }
       error.value = result.message || '发布失败'
       return null
-    } catch {
-      error.value = '发布失败'
+    } catch (e: any) {
+      console.error('保存文章失败:', e?.response?.data || e?.message || e)
+      error.value = e?.response?.data?.message || '发布失败，请检查网络连接'
       return null
     } finally {
       loading.value = false
@@ -94,8 +95,9 @@ export const useArticleStore = defineStore('article', () => {
       }
       error.value = result.message || '更新失败'
       return null
-    } catch {
-      error.value = '更新失败'
+    } catch (e: any) {
+      console.error('更新文章失败:', e?.response?.data || e?.message || e)
+      error.value = e?.response?.data?.message || '更新失败，请检查网络连接'
       return null
     } finally {
       loading.value = false

@@ -133,6 +133,7 @@ export interface CommentDTO {
   parentId?: string
   content: string
   status: string
+  images?: string[]
   replies: CommentDTO[]
   createdAt: string
 }
@@ -141,6 +142,7 @@ export interface CommentCreateDTO {
   articleId: string
   parentId?: string
   content: string
+  images?: string[]
 }
 
 export interface ReactionResponseDTO {

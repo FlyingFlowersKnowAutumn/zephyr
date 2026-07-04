@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
@@ -25,6 +25,68 @@ const props = withDefaults(defineProps<Props>(), {
 
 const tocItems = ref<TocItem[]>([])
 const activeTocId = ref('')
+
+const currentTocLine = computed(() => {
+  if (!activeTocId.value) return 1
+  const active = tocItems.value.find((t) => t.id === activeTocId.value)
+  return active?.lineNumber ?? 1
+})
+
+const visibleTocItems = computed(() => {
+  const items = tocItems.value
+  if (!items.length) return []
+
+  // 没有 h2 时全部展示
+  const hasH2 = items.some(item => item.level === 2)
+  if (!hasH2) return items
+
+  // 始终显示所有 h1 和 h2；仅当前活跃的 h2 章节展开其 h3 子项
+  if (!activeTocId.value) {
+    return items.filter(item => item.level <= 2)
+  }
+
+  const activeIdx = items.findIndex(t => t.id === activeTocId.value)
+  if (activeIdx === -1) return items.filter(item => item.level <= 2)
+
+  // 找到当前活跃标题所属的 h2 章节
+  let chapterH2Idx = activeIdx
+  if (items[chapterH2Idx].level > 2) {
+    // h3 → 向前找最近的 h2
+    while (chapterH2Idx >= 0 && items[chapterH2Idx].level !== 2) chapterH2Idx--
+  } else if (items[chapterH2Idx].level < 2) {
+    // h1 → 向后找第一个 h2
+    while (chapterH2Idx < items.length && items[chapterH2Idx].level !== 2) chapterH2Idx++
+  }
+
+  if (chapterH2Idx < 0 || chapterH2Idx >= items.length || items[chapterH2Idx].level !== 2) {
+    return items.filter(item => item.level <= 2)
+  }
+
+  // 找到该 h2 章节的结束位置（下一个 h2 前或末尾）
+  let chapterEnd = chapterH2Idx
+  while (chapterEnd < items.length - 1 && items[chapterEnd + 1].level > 2) {
+    chapterEnd++
+  }
+
+  // h1/h2 全部 + 当前章节的 h3
+  const result: TocItem[] = []
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].level <= 2) {
+      result.push(items[i])
+    } else if (i >= chapterH2Idx && i <= chapterEnd) {
+      result.push(items[i])
+    }
+  }
+  return result
+})
+
+// 目录自动跟踪滚动
+watch(activeTocId, () => {
+  nextTick(() => {
+    const el = document.querySelector('.toc-link.active')
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+})
 
 watch([() => props.articleContent, () => props.showToc], ([content, showToc]) => {
   if (content && showToc) {
@@ -61,6 +123,57 @@ function extractTocFromDom() {
   }
 }
 
+let scrollTicking = false
+
+function updateActiveHeading() {
+  const headings = document.querySelectorAll('.markdown-body h1[id], .markdown-body h2[id], .markdown-body h3[id]')
+  if (!headings.length) return
+
+  // 定位线：页面顶部（导航栏下方 80px）
+  const topLine = 80
+  // 找到最后一个顶部已越过定位线的标题，即为当前阅读位置
+  // 没有任何标题越过定位线时为空，不展开任何章节
+  let activeId = ''
+  for (const h of headings) {
+    if (h.getBoundingClientRect().top <= topLine) {
+      activeId = h.id
+    }
+  }
+  activeTocId.value = activeId
+}
+
+function onTocScroll() {
+  if (scrollTicking) return
+  scrollTicking = true
+  requestAnimationFrame(() => {
+    scrollTicking = false
+    updateActiveHeading()
+  })
+}
+
+function setupTocObserver() {
+  cleanupTocObserver()
+  window.addEventListener('scroll', onTocScroll, { passive: true })
+  updateActiveHeading()
+  if (!activeTocId.value && tocItems.value.length > 0) {
+    activeTocId.value = tocItems.value[0].id
+  }
+}
+
+function cleanupTocObserver() {
+  window.removeEventListener('scroll', onTocScroll)
+}
+
+watch([() => props.isArticlePage, tocItems], ([isArticle, items]) => {
+  if (isArticle && items.length > 0) {
+    setTimeout(() => {
+      setupTocObserver()
+    }, 300)
+  } else if (!isArticle) {
+    cleanupTocObserver()
+  }
+})
+
 function handleTocClick(id: string) {
   activeTocId.value = id
   scrollToHeading(id)
@@ -73,10 +186,6 @@ function getTocIndent(level: number): string {
     3: '2rem'
   }
   return indents[level] || '0'
-}
-
-function getTocNumber(index: number): string {
-  return `${index + 1}.`
 }
 
 const BLOGGER_ID = '6e2ca12d-5d59-43ee-a0b3-c7f50127fef8'
@@ -93,11 +202,6 @@ const stats = ref({
 })
 const latestArticles = ref<any[]>([])
 const archiveYears = ref<{ year: string; count: number }[]>([])
-const tagSphereRef = ref<HTMLElement | null>(null)
-let animationFrameId: number | null = null
-let angleX = 0
-let angleY = 0
-
 const tagColors: Record<string, string> = {}
 const colorPalette = [
   '#8B9A6B', '#A67C52', '#4A5568', '#38A169', '#38B2AC', '#9F7AEA', '#63B3ED', 
@@ -111,67 +215,6 @@ function getTagColor(tagName: string): string {
     tagColors[tagName] = colorPalette[index]
   }
   return tagColors[tagName]
-}
-
-function initTagSphere() {
-  if (!tagSphereRef.value || tags.value.length === 0) return
-
-  const sphere = tagSphereRef.value
-  const tagElements = sphere.querySelectorAll('.sphere-tag')
-  const radius = 100
-  const total = tags.value.length
-
-  tagElements.forEach((el, index) => {
-    const phi = Math.acos(-1 + (2 * index) / total)
-    const theta = Math.sqrt(total * Math.PI) * phi
-    const x = radius * Math.cos(theta) * Math.sin(phi)
-    const y = radius * Math.sin(theta) * Math.sin(phi)
-    const z = radius * Math.cos(phi)
-    ;(el as HTMLElement).dataset.x = String(x)
-    ;(el as HTMLElement).dataset.y = String(y)
-    ;(el as HTMLElement).dataset.z = String(z)
-  })
-
-  animateSphere()
-}
-
-function animateSphere() {
-  if (!tagSphereRef.value) {
-    animationFrameId = requestAnimationFrame(animateSphere)
-    return
-  }
-
-  const sphere = tagSphereRef.value
-  const tagElements = sphere.querySelectorAll('.sphere-tag')
-
-  angleX += 0.001
-  angleY += 0.002
-
-  const cosX = Math.cos(angleX)
-  const sinX = Math.sin(angleX)
-  const cosY = Math.cos(angleY)
-  const sinY = Math.sin(angleY)
-
-  tagElements.forEach((el) => {
-    const elem = el as HTMLElement
-    let x = parseFloat(elem.dataset.x || '0')
-    let y = parseFloat(elem.dataset.y || '0')
-    let z = parseFloat(elem.dataset.z || '0')
-
-    const y1 = y * cosX - z * sinX
-    const z1 = y * sinX + z * cosX
-    const x2 = x * cosY + z1 * sinY
-    const z2 = -x * sinY + z1 * cosY
-
-    const scale = (z2 + 150) / 250
-    const opacity = Math.max(0.3, Math.min(1, scale))
-
-    elem.style.transform = `translate3d(${x2}px, ${y1}px, ${z2}px) scale(${scale})`
-    elem.style.opacity = String(opacity)
-    elem.style.zIndex = String(Math.round(z2 + 200))
-  })
-
-  animationFrameId = requestAnimationFrame(animateSphere)
 }
 
 const isBlogger = computed(() => authStore.user?.role === 'blogger')
@@ -243,7 +286,7 @@ onMounted(async () => {
       stats.value.tags = tags.value.length
     }
     stats.value.articles = articleResult.total
-    latestArticles.value = articleResult.articles.slice(0, 3)
+    latestArticles.value = articleResult.articles.slice(0, 4)
 
     const yearMap: Record<string, number> = {}
     articleResult.articles.forEach((a: any) => {
@@ -254,9 +297,6 @@ onMounted(async () => {
       .map(([year, count]) => ({ year, count }))
       .sort((a, b) => b.year.localeCompare(a.year))
 
-    setTimeout(() => {
-      initTagSphere()
-    }, 100)
   } catch (e) {
     console.error('Failed to load sidebar data:', e)
   }
@@ -290,9 +330,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
-  }
+  cleanupTocObserver()
 })
 
 function formatDate(dateString?: string) {
@@ -419,34 +457,56 @@ async function saveAnnouncement() {
       </div>
     </div>
 
-    <div v-if="showToc && tocItems.length && isArticlePage" class="sidebar-card toc-card">
-      <div class="toc-header">
-        <svg class="toc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="4" y1="6" x2="20" y2="6" />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="18" x2="20" y2="18" />
-        </svg>
-        <span class="toc-title">目录</span>
-        <span class="toc-count">{{ tocItems.length }}</span>
+    <div v-if="showToc && isArticlePage" class="sidebar-sticky-group">
+      <div class="sidebar-card toc-card">
+        <div class="toc-header">
+          <svg class="toc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+          <span class="toc-title">目录</span>
+          <span class="toc-count">{{ currentTocLine }}</span>
+        </div>
+        <div v-if="tocItems.length === 0" class="toc-empty">本文暂无目录</div>
+        <nav v-else class="toc-nav">
+          <ul class="toc-list">
+            <li v-for="item in visibleTocItems" :key="item.id" class="toc-item">
+              <button
+                class="toc-link"
+                :class="{ active: activeTocId === item.id }"
+                :style="{ paddingLeft: getTocIndent(item.level) }"
+                @click="handleTocClick(item.id)"
+              >
+                <span class="toc-text">{{ item.text }}</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
       </div>
-      <nav class="toc-nav">
-        <ul class="toc-list">
-          <li v-for="(item, index) in tocItems" :key="item.id" class="toc-item">
-            <button
-              class="toc-link"
-              :class="{ active: activeTocId === item.id }"
-              :style="{ paddingLeft: getTocIndent(item.level) }"
-              @click="handleTocClick(item.id)"
-            >
-              <span class="toc-number">{{ getTocNumber(index) }}</span>
-              <span class="toc-text">{{ item.text }}</span>
-            </button>
+
+      <div v-if="latestArticles.length" class="sidebar-card latest-articles-card">
+        <h3 class="card-title">最新文章</h3>
+        <ul class="latest-articles-list">
+          <li v-for="article in latestArticles" :key="article.id">
+            <RouterLink :to="`/articles/${article.slug || article.id}`" class="article-link">
+              <div v-if="article.coverImage" class="article-cover">
+                <img :src="article.coverImage" :alt="article.title" />
+              </div>
+              <div v-else class="article-cover placeholder">
+                <span>📝</span>
+              </div>
+              <div class="article-info">
+                <span class="article-title">{{ article.title.slice(0, 20) }}{{ article.title.length > 20 ? '...' : '' }}</span>
+                <span class="article-date">{{ formatDate(article.publishedAt || article.createdAt) }}</span>
+              </div>
+            </RouterLink>
           </li>
         </ul>
-      </nav>
+      </div>
     </div>
 
-    <div v-if="(showRecentUpdates || isArticlePage) && latestArticles.length" class="sidebar-card latest-articles-card">
+    <div v-if="showRecentUpdates && !isArticlePage && latestArticles.length" class="sidebar-card latest-articles-card">
       <h3 class="card-title">最新文章</h3>
       <ul class="latest-articles-list">
         <li v-for="article in latestArticles" :key="article.id">
@@ -475,18 +535,18 @@ async function saveAnnouncement() {
           </svg>
         </RouterLink>
       </div>
-      <div v-if="tags.length" 
-           ref="tagSphereRef" 
-           class="tag-sphere"
-      >
-        <RouterLink 
-          v-for="tag in tags" 
+      <div v-if="tags.length" class="tag-cloud">
+        <RouterLink
+          v-for="(tag, idx) in tags"
           :key="tag.id"
           :to="{ path: '/tags', query: { tag: tag.name } }"
-          class="sphere-tag"
-          :style="{ '--tag-color': getTagColor(tag.name) }"
+          class="cloud-tag"
+          :style="{
+            '--tag-color': getTagColor(tag.name),
+            '--tag-index': idx
+          }"
         >
-          <span class="sphere-tag-inner">{{ tag.name }}</span>
+          {{ tag.name }}
         </RouterLink>
       </div>
       <div v-else class="empty-text">暂无</div>
@@ -955,7 +1015,7 @@ async function saveAnnouncement() {
   .category-title {
     font-size: 1rem;
     font-weight: 600;
-    color: #333;
+    color: var(--color-text-primary);
     margin-bottom: 0;
     display: flex;
     align-items: center;
@@ -970,7 +1030,7 @@ async function saveAnnouncement() {
   .category-arrow {
     display: flex;
     align-items: center;
-    color: #666;
+    color: var(--color-text-secondary);
     transition: color var(--transition-default), transform 0.3s ease;
 
     svg {
@@ -991,7 +1051,7 @@ async function saveAnnouncement() {
   margin: 0;
 
   li {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.1rem;
 
     &:last-child {
       margin-bottom: 0;
@@ -1003,8 +1063,8 @@ async function saveAnnouncement() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0.2rem;
-  color: #555;
+  padding: 0.25rem 0.2rem;
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   text-decoration: none;
   transition: all 0.2s ease;
@@ -1037,18 +1097,12 @@ async function saveAnnouncement() {
   margin-left: 0.5rem;
 }
 
-.tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
 
 .tag-sphere-card {
   overflow: hidden;
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #e8f5e9 30%, #c8e6c9 100%);
-  border: none !important;
- 
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border) !important;
 
   .tag-header {
     display: flex;
@@ -1061,7 +1115,7 @@ async function saveAnnouncement() {
   .tag-title {
     font-size: 1rem;
     font-weight: 600;
-    color: #333;
+    color: var(--color-text-primary);
     margin-bottom: 0;
     display: flex;
     align-items: center;
@@ -1076,7 +1130,7 @@ async function saveAnnouncement() {
   .tag-arrow {
     display: flex;
     align-items: center;
-    color: #666;
+    color: var(--color-text-secondary);
     transition: color var(--transition-default), transform 0.3s ease;
 
     svg {
@@ -1091,50 +1145,97 @@ async function saveAnnouncement() {
   }
 }
 
-.tag-sphere {
-  position: relative;
-  width: calc(100% + 3rem);
-  height: calc(200px + 1.5rem);
-  margin: 0 -1.5rem -1.5rem;
-  perspective: 800px;
-  transform-style: preserve-3d;
+.tag-cloud {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: center;
-  overflow: hidden;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
 }
 
-.sphere-tag {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform-origin: center center;
-  text-decoration: none;
-  transform-style: preserve-3d;
-  pointer-events: auto;
-  max-width: 80%;
-  box-sizing: border-box;
+.cloud-tag {
+  --float-dur: calc(2.5s + var(--tag-index) * 0.15s);
+  --float-delay: calc(var(--tag-index) * 0.12s);
+  --shimmer-delay: calc(var(--tag-index) * 0.2s);
 
-  .sphere-tag-inner {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    background: var(--tag-color);
-    opacity: 0.85;
-    color: white;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    cursor: pointer;
-    transition: transform 0.3s ease, opacity 0.3s ease;
-    transform-origin: center center;
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  background: var(--tag-color);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease;
+  animation: tagFloat var(--float-dur) ease-in-out var(--float-delay) infinite;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.25) 50%,
+      transparent 100%
+    );
+    animation: tagShimmer 3s ease-in-out var(--shimmer-delay) infinite;
   }
 
-  &:hover .sphere-tag-inner {
-    transform: scale(1.15);
-    opacity: 1;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.2) 0%,
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &:hover {
+    animation-play-state: paused;
+    transform: translateY(-4px) scale(1.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    text-decoration: none;
+    color: #fff;
+    z-index: 2;
+
+    &::before {
+      animation-play-state: paused;
+    }
+
+    &::after {
+      opacity: 1;
+    }
+  }
+}
+
+@keyframes tagFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes tagShimmer {
+  0%, 100% {
+    left: -100%;
+  }
+  50% {
+    left: 120%;
   }
 }
 
@@ -1150,7 +1251,7 @@ async function saveAnnouncement() {
   .archive-title {
     font-size: 1rem;
     font-weight: 600;
-    color: #333;
+    color: var(--color-text-primary);
     margin-bottom: 0;
     display: flex;
     align-items: center;
@@ -1165,7 +1266,7 @@ async function saveAnnouncement() {
   .archive-arrow {
     display: flex;
     align-items: center;
-    color: #666;
+    color: var(--color-text-secondary);
     transition: color var(--transition-default), transform 0.3s ease;
 
     svg {
@@ -1186,7 +1287,7 @@ async function saveAnnouncement() {
   margin: 0;
 
   li {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.1rem;
 
     &:last-child {
       margin-bottom: 0;
@@ -1198,8 +1299,8 @@ async function saveAnnouncement() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0;
-  color: #555;
+  padding: 0.25rem 0.2rem;
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   text-decoration: none;
   transition: all 0.2s ease;
@@ -1228,14 +1329,14 @@ async function saveAnnouncement() {
 .archive-count {
   flex-shrink: 0;
   font-size: 0.8rem;
-  color: #999;
+  color: var(--color-text-secondary);
 }
 
 .site-info-card {
   .site-info {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0;
   }
 }
 
@@ -1243,8 +1344,8 @@ async function saveAnnouncement() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.3rem 0;
-  font-size: 0.85rem;
+  padding: 0.25rem 0.2rem;
+  font-size: 0.9rem;
 }
 
 .info-label {
@@ -1262,10 +1363,19 @@ async function saveAnnouncement() {
   padding: 0.5rem 0;
 }
 
+.sidebar-sticky-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  position: sticky;
+  top: 1.5rem;
+  z-index: 10;
+}
+
 .toc-card {
   padding: 0;
-  border: none;
-  background: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
@@ -1274,7 +1384,7 @@ async function saveAnnouncement() {
   align-items: center;
   gap: 0.5rem;
   padding: 1rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border);
 
   .toc-icon {
     width: 18px;
@@ -1285,13 +1395,13 @@ async function saveAnnouncement() {
   .toc-title {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #333;
+    color: var(--color-text-primary);
     flex: 1;
   }
 
   .toc-count {
     font-size: 0.8rem;
-    color: #999;
+    color: var(--color-text-secondary);
     font-weight: 600;
   }
 }
@@ -1320,7 +1430,7 @@ async function saveAnnouncement() {
   background: transparent;
   border: none;
   border-radius: 0;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   cursor: pointer;
   width: 100%;
@@ -1339,26 +1449,20 @@ async function saveAnnouncement() {
     background: rgba(52, 211, 153, 0.15);
     color: #22c55e;
     font-weight: 500;
-
-    .toc-number {
-      color: #22c55e;
-    }
   }
-}
-
-.toc-number {
-  flex-shrink: 0;
-  font-size: 0.85rem;
-  color: #999;
-  font-weight: 600;
-  min-width: 1.5rem;
-  transition: color 0.2s ease;
 }
 
 .toc-text {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.toc-empty {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
 }
 
 .recent-updates-card {

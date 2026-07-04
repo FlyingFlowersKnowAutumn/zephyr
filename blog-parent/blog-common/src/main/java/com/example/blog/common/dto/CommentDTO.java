@@ -21,5 +21,6 @@ public class CommentDTO {
     private String content;
     private String status;
     private List<CommentDTO> replies;
+    private List<String> images;
     private LocalDateTime createdAt;
 }

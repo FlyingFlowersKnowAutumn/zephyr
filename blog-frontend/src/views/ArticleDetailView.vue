@@ -303,9 +303,10 @@ function formatDate(dateString: string) {
         </div>
       </div>
 
-      <ActionPanel 
+      <ActionPanel
         v-if="article && !loading"
-        :article-id="articleId" 
+        :article-id="articleId"
+        :article-author-id="article?.authorId"
         :article-title="article?.title"
         :article-content="article?.content"
       />
@@ -415,44 +416,43 @@ function formatDate(dateString: string) {
 }
 
 .article-header-no-bg {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 0 0.5rem;
 
   .article-title {
-    font-size: 2.25rem;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    margin: 0 0 1rem 0;
-    line-height: 1.4;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 0.75rem 0;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
   }
 
   .article-meta {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1.5rem;
-    color: var(--color-text-secondary);
+    gap: 1.25rem;
+    color: #6b7280;
     font-size: 0.875rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #f3f4f6;
 
     .meta-item {
       display: flex;
       align-items: center;
       gap: 0.375rem;
-
-      .meta-icon {
-        width: 16px;
-        height: 16px;
-      }
     }
   }
 }
 
 .category-link {
-  color: inherit;
+  color: #6b7280;
   text-decoration: none;
+  transition: color 0.2s;
 
   &:hover {
-    color: var(--color-accent);
-    text-decoration: underline;
+    color: #2563eb;
   }
 }
 
@@ -461,175 +461,207 @@ function formatDate(dateString: string) {
 }
 
 .article-content {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .article-excerpt {
-  background: rgba(200, 230, 255, 0.5);
-  border-left: 4px solid var(--color-accent);
-  padding-left: 15px;
-  padding-right: 15px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  margin-left: 32px;
-  margin-right: 32px;
-  margin-top: 15px;
-  margin-bottom: 15px;
-  color: var(--color-text-secondary);
+  background: #f0f7ff;
+  border-left: 4px solid #6366f1;
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 2rem;
+  color: #4b5563;
   font-size: 1rem;
   border-radius: 0 8px 8px 0;
-  line-height: 1.6;
+  line-height: 1.7;
+  font-style: italic;
 }
 
 .article-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0;
-  margin-left: 35px;
-  margin-right: 35px;
-  padding-top: 0;
-  padding-bottom: 0;
-  margin-top: 0;
+  gap: 0.5rem;
+  margin: 1rem 2rem 1.5rem;
 }
 
 .tag-btn {
-  padding: 0.4rem 1rem;
-  background: transparent;
-  border: 1px solid var(--color-accent);
-  border-radius: 20px;
-  font-size: 0.85rem;
-  color: var(--color-accent);
+  padding: 0.3rem 0.85rem;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #4b5563;
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
 
   &:hover {
-    background: rgba(0, 212, 255, 0.15);
-    transform: translateY(-2px);
+    background: #e5e7eb;
+    color: #111827;
   }
 }
 
-.markdown-body {
+:deep(.markdown-body) {
   padding: 0 2rem;
-  margin-top: 15px;
-  margin-bottom: 15px;
-  line-height: 1.8;
-  color: var(--color-text-secondary);
-  font-size: 1.1rem;
+  margin: 1.5rem 0;
+  line-height: 1.88;
+  color: #24292f;
+  font-size: 1rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-  h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
-    margin: 2rem 0 1rem 0;
-    color: var(--color-text-primary);
-    line-height: 1.3;
-    scroll-margin-top: 120px;
-
+  // ── 标题 ────────────────────────
+  h1, h2, h3, h4 {
+    color: #1a1a2e;
+    line-height: 1.35;
+    scroll-margin-top: 80px;
+    margin: 2rem 0 0.75rem;
     &:first-child { margin-top: 0; }
   }
 
-  h1 { font-size: 1.75rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem; }
-  h2 { font-size: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.4rem; }
-  h3 { font-size: 1.25rem; }
-  h4 { font-size: 1.1rem; }
-
-  p {
-    margin: 0 0 1rem 0;
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid #eaecef;
   }
 
-  a {
-    color: var(--color-accent);
-    text-decoration: none;
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #eaecef;
+  }
 
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #2c3e50;
+  }
+
+  h4 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #34495e;
+  }
+
+  // ── 段落 ────────────────────────
+  p {
+    margin: 0 0 1.25rem 0;
+  }
+
+  // ── 链接 ────────────────────────
+  a {
+    color: #0969da;
+    text-decoration: none;
     &:hover { text-decoration: underline; }
   }
 
-  ul, ol {
-    padding-left: 1.5rem;
-    margin: 0.5rem 0 1rem 0;
-  }
-
-  li {
-    margin: 0.25rem 0;
-  }
-
+  // ── 内联代码 ────────────────────────
   code {
-    background: rgba(255, 255, 255, 0.08);
-    padding: 0.2rem 0.4rem;
+    background: #f0f0f0;
+    padding: 0.2em 0.45em;
     border-radius: 3px;
-    font-family: 'Fira Code', 'Consolas', monospace;
+    font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
     font-size: 0.875em;
-    color: #e83e8c;
+    color: #1a1a2e;
   }
 
+  // ── 代码块 ────────────────────────
   pre {
-    background: #0d1117;
+    background: #f6f8fa;
+    border: 1px solid #d8dee4;
+    border-radius: 6px;
     padding: 1rem 1.25rem;
-    border-radius: 8px;
+    margin: 1.25rem 0;
     overflow-x: auto;
-    margin: 1rem 0;
+    line-height: 1.55;
 
     code {
       background: none;
       padding: 0;
-      color: #c9d1d9;
-      font-size: 0.875rem;
-      line-height: 1.6;
+      color: #24292f;
+      font-size: 0.85rem;
     }
   }
 
+  // ── 引用块 ────────────────────────
   blockquote {
-    border-left: 4px solid var(--color-accent);
+    border-left: 3px solid #d0d7de;
     padding: 0.5rem 0 0.5rem 1rem;
-    margin: 1rem 0;
-    color: var(--color-text-secondary);
-    background: rgba(0, 212, 255, 0.05);
-    border-radius: 0 6px 6px 0;
+    margin: 1.25rem 0;
+    color: #57606a;
 
     p:last-child { margin-bottom: 0; }
   }
 
+  // ── 列表 ────────────────────────
+  ul, ol {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0 1.25rem 0;
+  }
+
+  li {
+    margin: 0.3rem 0;
+    line-height: 1.8;
+    &::marker { color: #8b949e; }
+  }
+
+  // ── 表格 ────────────────────────
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.95rem;
+    margin: 1.25rem 0;
+    font-size: 0.9rem;
   }
 
   th, td {
-    border: 1px solid var(--color-border);
-    padding: 0.625rem 0.875rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid #d8dee4;
     text-align: left;
   }
 
   th {
-    background: rgba(255, 255, 255, 0.05);
+    background: #f6f8fa;
     font-weight: 600;
+    color: #24292f;
+    font-size: 0.85rem;
   }
 
-  tr:nth-child(even) {
-    background: rgba(255, 255, 255, 0.02);
+  td {
+    color: #24292f;
   }
 
+  tbody tr:nth-child(even) td {
+    background: #fafbfc;
+  }
+
+  // ── 分割线 ────────────────────────
   hr {
     border: none;
-    border-top: 1px solid var(--color-border);
+    height: 1px;
+    background: #d8dee4;
     margin: 2rem 0;
   }
 
+  // ── 图片 ────────────────────────
   img {
     max-width: 100%;
-    border-radius: 8px;
-    margin: 1rem 0;
+    border-radius: 6px;
+    margin: 1.25rem auto;
+    display: block;
   }
 
+  // ── 强调 ────────────────────────
   strong {
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: #1a1a2e;
+  }
+
+  em {
+    color: #57606a;
   }
 }
 
@@ -753,7 +785,7 @@ function formatDate(dateString: string) {
     }
   }
 
-  .markdown-body {
+  :deep(.markdown-body) {
     padding: 1.5rem;
     font-size: 1rem;
   }
@@ -766,5 +798,87 @@ function formatDate(dateString: string) {
     margin: 1.5rem;
     padding: 1rem;
   }
+}
+</style>
+
+<style lang="scss">
+html.dark {
+  .article-header-no-bg .article-title {
+    color: var(--color-text-primary);
+  }
+  .article-header-no-bg .article-meta {
+    color: var(--color-text-secondary);
+    border-bottom-color: var(--color-border);
+  }
+  .category-link {
+    color: var(--color-text-secondary);
+    &:hover { color: var(--color-accent); }
+  }
+  .article-content {
+    background: var(--color-bg-card);
+    border-color: var(--color-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  .article-excerpt {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--color-text-secondary);
+    border-left-color: #818cf8;
+  }
+  .tag-btn {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    &:hover {
+      background: var(--color-hover-bg);
+      color: var(--color-text-primary);
+    }
+  }
+}
+
+html.dark .markdown-body {
+  color: #c9d1d9;
+  background: var(--color-bg-card);
+
+  h1, h2, h3, h4 {
+    color: #e2e8f0;
+  }
+  h1 { border-bottom-color: #30363d; }
+  h2 { border-bottom-color: #30363d; }
+  h3 { color: #c9d1d9; }
+  h4 { color: #b0b8c4; }
+
+  a { color: #58a6ff; }
+
+  code {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+
+  pre {
+    background: #0d1b2a;
+    border-color: #30363d;
+    code { color: #c9d1d9; }
+  }
+
+  blockquote {
+    border-left-color: #30363d;
+    color: #8b949e;
+  }
+
+  li::marker { color: #6e7681; }
+
+  th, td {
+    border-color: #30363d;
+  }
+  th {
+    background: #1a2740;
+    color: #e2e8f0;
+  }
+  td { color: #c9d1d9; }
+  tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+
+  hr { background: #30363d; }
+
+  strong { color: #e2e8f0; }
+  em { color: #8b949e; }
 }
 </style>

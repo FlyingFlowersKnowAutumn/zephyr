@@ -23,6 +23,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CommentServiceTest {
 
+    private static final String ARTICLE_ID = "969f3060-e528-4d37-a400-1ea6cb00faec";
+    private static final String USER_ID = "6e2ca12d-5d59-43ee-a0b3-c7f50127fef8";
+    private static final String PARENT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
     @Mock private CommentRepository commentRepository;
     @Mock private SensitiveWordFilter sensitiveWordFilter;
     @Mock private ArticleStatsClient articleStatsClient;
@@ -31,39 +35,39 @@ class CommentServiceTest {
     @Test
     void shouldCreateCommentWithFilteredContent() {
         CommentCreateDTO dto = new CommentCreateDTO();
-        dto.setArticleId("article-1");
+        dto.setArticleId(ARTICLE_ID);
         dto.setContent("正常评论");
 
         when(sensitiveWordFilter.filter("正常评论")).thenReturn("正常评论");
         when(commentRepository.save(any(Comment.class))).thenAnswer(inv -> {
             Comment c = inv.getArgument(0);
-            c.setId(UUID.randomUUID().toString());
+            c.setId(UUID.randomUUID());
             return c;
         });
 
-        CommentDTO result = commentService.createComment(dto, "user-1", "User");
+        CommentDTO result = commentService.createComment(dto, USER_ID, "User");
 
         assertNotNull(result);
-        assertEquals("article-1", result.getArticleId());
+        assertEquals(ARTICLE_ID, result.getArticleId());
         assertEquals("正常评论", result.getContent());
         verify(sensitiveWordFilter).filter("正常评论");
-        verify(articleStatsClient).syncCommentCount("article-1", 1);
+        verify(articleStatsClient).syncCommentCount(ARTICLE_ID, 1);
     }
 
     @Test
     void shouldFilterSensitiveWordsInComment() {
         CommentCreateDTO dto = new CommentCreateDTO();
-        dto.setArticleId("article-1");
+        dto.setArticleId(ARTICLE_ID);
         dto.setContent("包含敏感词");
 
         when(sensitiveWordFilter.filter("包含敏感词")).thenReturn("包含**");
         when(commentRepository.save(any(Comment.class))).thenAnswer(inv -> {
             Comment c = inv.getArgument(0);
-            c.setId(UUID.randomUUID().toString());
+            c.setId(UUID.randomUUID());
             return c;
         });
 
-        CommentDTO result = commentService.createComment(dto, "user-1", "User");
+        CommentDTO result = commentService.createComment(dto, USER_ID, "User");
 
         assertEquals("包含**", result.getContent());
     }
@@ -71,40 +75,42 @@ class CommentServiceTest {
     @Test
     void shouldCreateReplyToParent() {
         Comment parent = Comment.builder()
-                .id("parent-id")
-                .articleId("article-1")
-                .userId("other-user")
+                .id(UUID.fromString(PARENT_ID))
+                .articleId(UUID.fromString(ARTICLE_ID))
+                .userId(UUID.fromString(USER_ID))
                 .content("parent comment")
                 .build();
 
         CommentCreateDTO dto = new CommentCreateDTO();
-        dto.setArticleId("article-1");
+        dto.setArticleId(ARTICLE_ID);
         dto.setContent("reply");
-        dto.setParentId("parent-id");
+        dto.setParentId(PARENT_ID);
 
-        when(commentRepository.findById("parent-id")).thenReturn(Optional.of(parent));
+        when(commentRepository.findById(UUID.fromString(PARENT_ID))).thenReturn(Optional.of(parent));
         when(sensitiveWordFilter.filter("reply")).thenReturn("reply");
         when(commentRepository.save(any(Comment.class))).thenAnswer(inv -> {
             Comment c = inv.getArgument(0);
-            c.setId(UUID.randomUUID().toString());
+            c.setId(UUID.randomUUID());
             return c;
         });
 
-        CommentDTO result = commentService.createComment(dto, "user-1", "User");
+        CommentDTO result = commentService.createComment(dto, USER_ID, "User");
 
         assertNotNull(result);
-        assertEquals("parent-id", result.getParentId());
+        assertEquals(PARENT_ID, result.getParentId());
     }
 
     @Test
     void shouldThrowWhenParentNotFound() {
+        UUID missingParentId = UUID.fromString("a1b2c3d4-0000-0000-0000-000000000000");
+
         CommentCreateDTO dto = new CommentCreateDTO();
-        dto.setArticleId("article-1");
+        dto.setArticleId(ARTICLE_ID);
         dto.setContent("reply");
-        dto.setParentId("missing-parent");
+        dto.setParentId(missingParentId.toString());
 
-        when(commentRepository.findById("missing-parent")).thenReturn(Optional.empty());
+        when(commentRepository.findById(missingParentId)).thenReturn(Optional.empty());
 
-        assertThrows(BusinessException.class, () -> commentService.createComment(dto, "user-1", "User"));
+        assertThrows(BusinessException.class, () -> commentService.createComment(dto, USER_ID, "User"));
     }
 }

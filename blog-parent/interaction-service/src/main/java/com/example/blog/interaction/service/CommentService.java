@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -33,8 +34,12 @@ public class CommentService {
 
     @Transactional
     public CommentDTO createComment(CommentCreateDTO dto, String userId, String userName) {
-        if (dto.getParentId() != null) {
-            Comment parent = commentRepository.findById(dto.getParentId())
+        UUID articleUuid = UUID.fromString(dto.getArticleId());
+        UUID userUuid = UUID.fromString(userId);
+        UUID parentUuid = dto.getParentId() != null ? UUID.fromString(dto.getParentId()) : null;
+
+        if (parentUuid != null) {
+            Comment parent = commentRepository.findById(parentUuid)
                     .orElseThrow(() -> BusinessException.notFound("父评论不存在"));
             if (!parent.isTopLevel()) {
                 throw BusinessException.badRequest("仅支持一级回复");
@@ -44,10 +49,13 @@ public class CommentService {
         String filteredContent = sensitiveWordFilter.filter(dto.getContent());
 
         Comment comment = Comment.builder()
-                .articleId(dto.getArticleId())
-                .userId(userId)
-                .parentId(dto.getParentId())
+                .articleId(articleUuid)
+                .userId(userUuid)
+                .parentId(parentUuid)
                 .content(filteredContent)
+                .images(dto.getImages() != null && !dto.getImages().isEmpty()
+                        ? String.join(",", dto.getImages())
+                        : null)
                 .build();
 
         Comment saved = commentRepository.save(comment);
@@ -59,8 +67,9 @@ public class CommentService {
 
     @Transactional(readOnly = true)
     public Page<CommentDTO> getComments(String articleId, int page, int size) {
+        UUID articleUuid = UUID.fromString(articleId);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Comment> topLevelPage = commentRepository.findTopLevelByArticleId(articleId, pageable);
+        Page<Comment> topLevelPage = commentRepository.findTopLevelByArticleId(articleUuid, pageable);
 
         return topLevelPage.map(comment -> {
             CommentDTO dto = convertToDTO(comment, null);
@@ -74,30 +83,33 @@ public class CommentService {
 
     @Transactional(readOnly = true)
     public List<CommentDTO> getReplies(String commentId) {
-        return commentRepository.findRepliesByParentId(commentId).stream()
+        UUID parentUuid = UUID.fromString(commentId);
+        return commentRepository.findRepliesByParentId(parentUuid).stream()
                 .map(r -> convertToDTO(r, null))
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public void deleteComment(String id, String userId, boolean isAdmin) {
-        Comment comment = commentRepository.findById(id)
+        UUID uuid = UUID.fromString(id);
+        Comment comment = commentRepository.findById(uuid)
                 .orElseThrow(() -> BusinessException.notFound("评论不存在"));
 
-        if (!isAdmin && !comment.getUserId().equals(userId)) {
+        if (!isAdmin && !comment.getUserId().toString().equals(userId)) {
             throw BusinessException.forbidden("无权删除此评论");
         }
 
         comment.setDeletedAt(LocalDateTime.now());
         commentRepository.save(comment);
-        articleStatsClient.syncCommentCount(comment.getArticleId(), -1);
+        articleStatsClient.syncCommentCount(comment.getArticleId().toString(), -1);
 
         log.info("Comment deleted: id={}, articleId={}", id, comment.getArticleId());
     }
 
     @Transactional
     public void updateStatus(String id, CommentStatusUpdateDTO dto) {
-        Comment comment = commentRepository.findById(id)
+        UUID uuid = UUID.fromString(id);
+        Comment comment = commentRepository.findById(uuid)
                 .orElseThrow(() -> BusinessException.notFound("评论不存在"));
         comment.setStatus(dto.getStatus());
         commentRepository.save(comment);
@@ -105,14 +117,19 @@ public class CommentService {
     }
 
     private CommentDTO convertToDTO(Comment comment, String userName) {
+        List<String> imageList = comment.getImages() != null && !comment.getImages().isEmpty()
+                ? List.of(comment.getImages().split(","))
+                : Collections.emptyList();
+
         return CommentDTO.builder()
-                .id(comment.getId())
-                .articleId(comment.getArticleId())
-                .userId(comment.getUserId())
+                .id(comment.getId().toString())
+                .articleId(comment.getArticleId().toString())
+                .userId(comment.getUserId().toString())
                 .userName(userName)
-                .parentId(comment.getParentId())
+                .parentId(comment.getParentId() != null ? comment.getParentId().toString() : null)
                 .content(comment.getContent())
                 .status(comment.getStatus())
+                .images(imageList)
                 .replies(Collections.emptyList())
                 .createdAt(comment.getCreatedAt())
                 .build();

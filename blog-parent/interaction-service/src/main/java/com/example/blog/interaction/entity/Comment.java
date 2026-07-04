@@ -6,11 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "comments")
@@ -22,20 +21,16 @@ public class Comment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @JdbcTypeCode(SqlTypes.UUID)
-    private String id;
+    private UUID id;
 
-    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "article_id", nullable = false)
-    private String articleId;
+    private UUID articleId;
 
-    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "user_id", nullable = false)
-    private String userId;
+    private UUID userId;
 
-    @JdbcTypeCode(SqlTypes.UUID)
     @Column(name = "parent_id")
-    private String parentId;
+    private UUID parentId;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
@@ -43,6 +38,9 @@ public class Comment {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private String status = "approved";
+
+    @Column(columnDefinition = "TEXT")
+    private String images;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
