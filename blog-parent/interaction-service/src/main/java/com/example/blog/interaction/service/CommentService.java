@@ -5,6 +5,7 @@ import com.example.blog.common.dto.CommentDTO;
 import com.example.blog.common.dto.CommentStatusUpdateDTO;
 import com.example.blog.common.exception.BusinessException;
 import com.example.blog.interaction.client.ArticleStatsClient;
+import com.example.blog.interaction.client.UserClient;
 import com.example.blog.interaction.entity.Comment;
 import com.example.blog.interaction.repository.CommentRepository;
 import com.example.blog.interaction.util.SensitiveWordFilter;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -31,19 +34,19 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final SensitiveWordFilter sensitiveWordFilter;
     private final ArticleStatsClient articleStatsClient;
+    private final UserClient userClient;
 
     @Transactional
     public CommentDTO createComment(CommentCreateDTO dto, String userId, String userName) {
         UUID articleUuid = UUID.fromString(dto.getArticleId());
         UUID userUuid = UUID.fromString(userId);
         UUID parentUuid = dto.getParentId() != null ? UUID.fromString(dto.getParentId()) : null;
+        UUID replyToUserId = null;
 
         if (parentUuid != null) {
             Comment parent = commentRepository.findById(parentUuid)
                     .orElseThrow(() -> BusinessException.notFound("父评论不存在"));
-            if (!parent.isTopLevel()) {
-                throw BusinessException.badRequest("仅支持一级回复");
-            }
+            replyToUserId = parent.getUserId();
         }
 
         String filteredContent = sensitiveWordFilter.filter(dto.getContent());
@@ -62,7 +65,7 @@ public class CommentService {
         articleStatsClient.syncCommentCount(dto.getArticleId(), 1);
 
         log.info("Comment created: id={}, articleId={}, userId={}", saved.getId(), saved.getArticleId(), userId);
-        return convertToDTO(saved, userName);
+        return convertToDTO(saved, replyToUserId);
     }
 
     @Transactional(readOnly = true)
@@ -72,20 +75,41 @@ public class CommentService {
         Page<Comment> topLevelPage = commentRepository.findTopLevelByArticleId(articleUuid, pageable);
 
         return topLevelPage.map(comment -> {
-            CommentDTO dto = convertToDTO(comment, null);
+            CommentDTO dto = convertToDTO(comment);
             List<Comment> replies = commentRepository.findRepliesByParentId(comment.getId());
             dto.setReplies(replies.stream()
-                    .map(r -> convertToDTO(r, null))
+                    .map(r -> {
+                        CommentDTO replyDto = convertToDTO(r, comment.getUserId());
+                        replyDto.setReplies(getNestedReplies(r.getId()));
+                        return replyDto;
+                    })
                     .collect(Collectors.toList()));
             return dto;
         });
+    }
+
+    private List<CommentDTO> getNestedReplies(UUID parentId) {
+        Comment parent = commentRepository.findById(parentId).orElse(null);
+        UUID parentUserId = parent != null ? parent.getUserId() : null;
+        
+        List<Comment> replies = commentRepository.findRepliesByParentId(parentId);
+        return replies.stream()
+                .map(r -> {
+                    CommentDTO replyDto = convertToDTO(r, parentUserId);
+                    List<CommentDTO> nested = getNestedReplies(r.getId());
+                    if (!nested.isEmpty()) {
+                        replyDto.setReplies(nested);
+                    }
+                    return replyDto;
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<CommentDTO> getReplies(String commentId) {
         UUID parentUuid = UUID.fromString(commentId);
         return commentRepository.findRepliesByParentId(parentUuid).stream()
-                .map(r -> convertToDTO(r, null))
+                .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
 
@@ -116,22 +140,55 @@ public class CommentService {
         log.info("Comment status updated: id={}, status={}", id, dto.getStatus());
     }
 
-    private CommentDTO convertToDTO(Comment comment, String userName) {
+    private CommentDTO convertToDTO(Comment comment, UUID replyToUserId) {
         List<String> imageList = comment.getImages() != null && !comment.getImages().isEmpty()
                 ? List.of(comment.getImages().split(","))
                 : Collections.emptyList();
+
+        String avatarUrl = null;
+        String displayName = null;
+        String replyToUserName = null;
+
+        UserClient.UserProfileResponse profileResponse = userClient.getUserProfile(comment.getUserId().toString());
+        if (profileResponse != null && profileResponse.isSuccess() && profileResponse.getData() != null) {
+            if (profileResponse.getData().getDisplayName() != null && !profileResponse.getData().getDisplayName().isEmpty()) {
+                displayName = profileResponse.getData().getDisplayName();
+            }
+            avatarUrl = profileResponse.getData().getAvatarUrl();
+        }
+
+        if (replyToUserId != null) {
+            UserClient.UserProfileResponse replyToProfile = userClient.getUserProfile(replyToUserId.toString());
+            if (replyToProfile != null && replyToProfile.isSuccess() && replyToProfile.getData() != null) {
+                if (replyToProfile.getData().getDisplayName() != null && !replyToProfile.getData().getDisplayName().isEmpty()) {
+                    replyToUserName = replyToProfile.getData().getDisplayName();
+                }
+            }
+        }
+
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = "匿名";
+        }
 
         return CommentDTO.builder()
                 .id(comment.getId().toString())
                 .articleId(comment.getArticleId().toString())
                 .userId(comment.getUserId().toString())
-                .userName(userName)
+                .userName(displayName)
+                .avatarUrl(avatarUrl)
                 .parentId(comment.getParentId() != null ? comment.getParentId().toString() : null)
+                .replyToUserName(replyToUserName)
                 .content(comment.getContent())
                 .status(comment.getStatus())
                 .images(imageList)
                 .replies(Collections.emptyList())
-                .createdAt(comment.getCreatedAt())
+                .createdAt(comment.getCreatedAt() != null 
+                        ? comment.getCreatedAt().atZone(ZoneId.of("Asia/Shanghai"))
+                        : ZonedDateTime.now(ZoneId.of("Asia/Shanghai")))
                 .build();
+    }
+
+    private CommentDTO convertToDTO(Comment comment) {
+        return convertToDTO(comment, null);
     }
 }

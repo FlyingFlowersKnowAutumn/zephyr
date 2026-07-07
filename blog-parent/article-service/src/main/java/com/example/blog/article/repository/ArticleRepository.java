@@ -70,4 +70,7 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
            countQuery = "SELECT count(*) FROM articles WHERE status = :status AND search_vector @@ plainto_tsquery('simple', :query)",
            nativeQuery = true)
     Page<Article> searchByTsVector(@Param("query") String query, @Param("status") String status, Pageable pageable);
+
+    @Query("SELECT MAX(COALESCE(a.updatedAt, a.publishedAt, a.createdAt)) FROM Article a WHERE a.status = :status")
+    LocalDateTime findLatestArticleTime(@Param("status") ArticleStatus status);
 }

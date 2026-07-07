@@ -3,7 +3,7 @@ import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
-import { listCategories, listTags } from '@/api/article'
+import { listCategories, listTags, getLatestArticleTime } from '@/api/article'
 import { getUserProfile, getAnnouncement, updateAnnouncement } from '@/api/profile'
 import { getSiteStats } from '@/api/site'
 import { generateTocFromMarkdown, generateTocFromHtml, scrollToHeading, type TocItem } from '@/utils/toc'
@@ -327,6 +327,13 @@ onMounted(async () => {
       }
     }
   } catch { /* use default */ }
+
+  try {
+    const result = await getLatestArticleTime()
+    if (result.code === 0 && result.data && result.data.latestTime) {
+      siteInfo.value.lastUpdate = result.data.latestTime
+    }
+  } catch { /* use default */ }
 })
 
 onUnmounted(() => {
@@ -356,7 +363,7 @@ function formatRelativeTime(dateString?: string): string {
   const diffYears = Math.floor(diffDays / 365)
 
   if (diffSeconds < 60) {
-    return '刚刚'
+    return '刚刚发布'
   } else if (diffMinutes < 60) {
     return `${diffMinutes}分钟前`
   } else if (diffHours < 24) {
@@ -929,10 +936,12 @@ async function saveAnnouncement() {
 }
 
 .latest-articles-list li {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
+  padding: 0.75rem 0;
+  border-bottom: 1px dashed var(--color-border);
 
   &:last-child {
-    margin-bottom: 0;
+    border-bottom: none;
   }
 }
 
@@ -941,10 +950,38 @@ async function saveAnnouncement() {
   gap: 0.75rem;
   text-decoration: none;
   color: inherit;
-  transition: opacity var(--transition-default);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.15), transparent);
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 
   &:hover {
-    opacity: 0.8;
+    transform: translateX(4px);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(52, 152, 219, 0.08) 100%);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+
+    &::after {
+      left: 100%;
+    }
+
+    .article-title {
+      color: var(--color-accent);
+    }
+
+    .article-cover img {
+      transform: scale(1.1);
+    }
   }
 }
 
@@ -960,6 +997,7 @@ async function saveAnnouncement() {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
@@ -1063,22 +1101,47 @@ async function saveAnnouncement() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.25rem 0.2rem;
+  padding: 0.4rem 0.8rem;
   color: var(--color-text-secondary);
   font-size: 0.9rem;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   box-sizing: border-box;
-  border-radius: 6px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.15), transparent);
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 
   &:hover {
-    background: rgba(52, 152, 219, 0.12);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(52, 152, 219, 0.08) 100%);
     color: var(--color-accent);
-    padding: 0.35rem 0.75rem;
+    transform: translateX(4px);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+
+    &::after {
+      left: 100%;
+    }
 
     .category-count {
       color: var(--color-accent);
+      transform: scale(1.15);
+      text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+
+    .category-name {
+      transform: translateX(3px);
+      font-weight: 500;
     }
   }
 }
@@ -1088,6 +1151,7 @@ async function saveAnnouncement() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .category-count {
@@ -1095,6 +1159,7 @@ async function saveAnnouncement() {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   margin-left: 0.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 
@@ -1160,7 +1225,7 @@ async function saveAnnouncement() {
 
   display: inline-block;
   padding: 0.35rem 0.75rem;
-  border-radius: 20px;
+  border-radius: 4px;
   font-size: 0.78rem;
   font-weight: 500;
   color: #fff;
@@ -1193,7 +1258,7 @@ async function saveAnnouncement() {
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 20px;
+    border-radius: 4px;
     background: radial-gradient(
       circle at 30% 30%,
       rgba(255, 255, 255, 0.2) 0%,
@@ -1299,22 +1364,47 @@ async function saveAnnouncement() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.25rem 0.2rem;
+  padding: 0.4rem 0.8rem;
   color: var(--color-text-secondary);
   font-size: 0.9rem;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   box-sizing: border-box;
-  border-radius: 6px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.15), transparent);
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 
   &:hover {
-    background: rgba(52, 152, 219, 0.12);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(52, 152, 219, 0.08) 100%);
     color: var(--color-accent);
-    padding: 0.35rem 0.75rem;
+    transform: translateX(4px);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+
+    &::after {
+      left: 100%;
+    }
 
     .archive-count {
       color: var(--color-accent);
+      transform: scale(1.15);
+      text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+
+    .archive-name {
+      transform: translateX(3px);
+      font-weight: 500;
     }
   }
 }
@@ -1324,12 +1414,14 @@ async function saveAnnouncement() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .archive-count {
   flex-shrink: 0;
   font-size: 0.8rem;
   color: var(--color-text-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .site-info-card {

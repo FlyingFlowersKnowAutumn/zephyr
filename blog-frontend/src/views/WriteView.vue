@@ -147,7 +147,7 @@ function initMeteors(width: number, height: number) {
 function createMeteor(width: number, height: number, randomY = false): Meteor {
   const depth = Math.random()
   const size = depth * 1.5 + 0.5
-  const baseSpeed = 0.8
+  const baseSpeed = 0.35
   const speed = baseSpeed * (depth * 1.5 + 0.3)
   
   return {
@@ -453,6 +453,13 @@ async function handleCoverUpload(event: Event) {
   const file = target.files?.[0]
   if (!file) return
 
+  const maxSize = 5 * 1024 * 1024
+  if (file.size > maxSize) {
+    ElMessage.error('图片大小不能超过 5MB')
+    target.value = ''
+    return
+  }
+
   coverUploading.value = true
   try {
     const url = await uploadImage(file)
@@ -473,6 +480,13 @@ async function handleContentUpload(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
+
+  const maxSize = 5 * 1024 * 1024
+  if (file.size > maxSize) {
+    ElMessage.error('图片大小不能超过 5MB')
+    target.value = ''
+    return
+  }
 
   contentUploading.value = true
   try {
@@ -616,7 +630,7 @@ function exportMd() {
                     <line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
                   <p>{{ coverUploading ? '上传中...' : '点击上传封面图片' }}</p>
-                  <span class="cover-hint">支持 jpg、png、webp，≤ 2MB</span>
+                  <span class="cover-hint">支持 jpg、png、webp，≤ 5MB</span>
                 </div>
                 <div v-else class="cover-preview">
                   <img :src="coverImage" alt="封面预览" />

@@ -15,6 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const showReplyForm = ref(false)
+const showReplies = ref(true)
 const replyContent = ref('')
 const maxDepth = 1
 
@@ -33,8 +34,14 @@ async function handleReply() {
   showReplyForm.value = false
 }
 
+function toggleReplies() {
+  showReplies.value = !showReplies.value
+}
+
 function formatDate(dateString: string) {
+  if (!dateString) return ''
   const date = new Date(dateString)
+  if (isNaN(date.getTime())) return ''
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const minutes = Math.floor(diff / 60000)
@@ -53,8 +60,14 @@ function formatDate(dateString: string) {
   <div class="comment-item" :class="{ 'is-reply': depth }">
     <div class="comment-body">
       <div class="comment-header">
-        <span class="comment-author">{{ comment.userName || '匿名' }}</span>
-        <span class="comment-time">{{ formatDate(comment.createdAt) }}</span>
+        <div class="comment-avatar">
+          <img v-if="comment.avatarUrl" :src="comment.avatarUrl" :alt="comment.userName" />
+          <span v-else class="avatar-placeholder">{{ (comment.userName || '匿名').charAt(0) }}</span>
+        </div>
+        <div class="comment-meta">
+          <span class="comment-author">{{ comment.userName || '匿名' }}</span>
+          <span class="comment-time">{{ formatDate(comment.createdAt) }}</span>
+        </div>
       </div>
       <p class="comment-content">{{ comment.content }}</p>
       <div class="comment-actions">
@@ -63,6 +76,9 @@ function formatDate(dateString: string) {
         </button>
         <button v-if="canDelete()" class="action-btn delete-btn" @click="emit('delete', comment.id)">
           删除
+        </button>
+        <button v-if="!depth" class="action-btn reply-count-btn" @click="toggleReplies">
+          {{ comment.replies?.length || 0 }} 条回复
         </button>
       </div>
 
@@ -79,7 +95,7 @@ function formatDate(dateString: string) {
       </div>
     </div>
 
-    <div v-if="comment.replies && comment.replies.length > 0" class="replies">
+    <div v-if="!depth && showReplies && comment.replies && comment.replies.length > 0" class="replies">
       <CommentItem
         v-for="reply in comment.replies"
         :key="reply.id"
@@ -115,6 +131,38 @@ function formatDate(dateString: string) {
   margin-bottom: 0.5rem;
 }
 
+.comment-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--color-accent);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+}
+
+.comment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
 .comment-author {
   font-weight: 600;
   font-size: 0.875rem;
@@ -122,7 +170,7 @@ function formatDate(dateString: string) {
 }
 
 .comment-time {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--color-text-secondary);
 }
 
@@ -131,11 +179,23 @@ function formatDate(dateString: string) {
   line-height: 1.6;
   color: var(--color-text-primary);
   margin: 0 0 0.5rem 0;
+  padding-left: 3rem;
 }
 
 .comment-actions {
   display: flex;
+  align-items: center;
+  padding-left: 3rem;
   gap: 1rem;
+
+  .reply-count-btn {
+    margin-left: auto;
+    color: var(--color-text-secondary);
+
+    &:hover {
+      color: var(--color-accent);
+    }
+  }
 }
 
 .action-btn {
@@ -158,6 +218,7 @@ function formatDate(dateString: string) {
 
 .reply-form {
   margin-top: 0.75rem;
+  padding-left: 3rem;
 
   textarea {
     width: 100%;

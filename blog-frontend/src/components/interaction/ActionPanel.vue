@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import * as commentApi from '@/api/comment'
 import * as favoriteApi from '@/api/favorite'
@@ -39,7 +39,7 @@ const loadedReplies = ref<Record<string, CommentDTO[]>>({})
 const replyVisible = ref<Record<string, number>>({})
 const loadingReplies = ref<Record<string, boolean>>({})
 
-const replyingTo = ref<{ commentId: string; parentUserName?: string } | null>(null)
+const replyingTo = ref<{ commentId: string; parentId: string; parentUserName?: string } | null>(null)
 const replyText = ref('')
 const replyImages = ref<string[]>([])
 const uploadingReplyImage = ref(false)
@@ -49,10 +49,40 @@ const commentSentinel = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
 
 onMounted(async () => {
+  await loadData()
+})
+
+onUnmounted(() => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
+})
+
+watch(() => props.articleId, async (newId) => {
+  if (!newId) return
+  comments.value = []
+  commentPage.value = 0
+  hasMoreComments.value = false
+  commentCount.value = 0
+  replyVisible.value = {}
+  loadedReplies.value = {}
+  loadingMore.value = false
+  replyingTo.value = null
+  replyText.value = ''
+  replyImages.value = []
+  await loadDataForArticle(newId)
+}, { immediate: false })
+
+async function loadData() {
+  await loadDataForArticle(props.articleId)
+}
+
+async function loadDataForArticle(articleId: string) {
   const [commentResult, favoriteResult, reactionResult] = await Promise.all([
-    commentApi.getComments(props.articleId, 0, 20),
-    favoriteApi.getFavoriteStatus(props.articleId),
-    reactionApi.getReactionStatus(props.articleId)
+    commentApi.getComments(articleId, 0, 20),
+    favoriteApi.getFavoriteStatus(articleId),
+    reactionApi.getReactionStatus(articleId)
   ])
 
   if (commentResult.code === 0 && commentResult.data) {
@@ -74,14 +104,7 @@ onMounted(async () => {
 
   await nextTick()
   setupLoadMoreObserver()
-})
-
-onUnmounted(() => {
-  if (loadMoreObserver) {
-    loadMoreObserver.disconnect()
-    loadMoreObserver = null
-  }
-})
+}
 
 function setupLoadMoreObserver() {
   if (loadMoreObserver) loadMoreObserver.disconnect()
@@ -164,7 +187,15 @@ async function handleDeleteComment(id: string) {
   try {
     const result = await commentApi.deleteComment(id)
     if (result.code === 0) {
-      comments.value = comments.value.filter((c) => c.id !== id)
+      function removeComment(arr: CommentDTO[]): CommentDTO[] {
+        return arr.filter(c => c.id !== id).map(c => {
+          if (c.replies?.length) {
+            c.replies = removeComment(c.replies)
+          }
+          return c
+        })
+      }
+      comments.value = removeComment(comments.value)
       delete loadedReplies.value[id]
       ElMessage.success('评论已删除')
     } else {
@@ -219,20 +250,71 @@ async function loadReplies(commentId: string) {
   }
 }
 
+function toggleReplies(commentId: string) {
+  const comment = comments.value.find(c => c.id === commentId)
+  if (!comment?.replies) return
+  const total = getAllReplies(comment.replies).length
+  const current = replyVisible.value[commentId] || 0
+  
+  if (current === 0) {
+    replyVisible.value[commentId] = Math.min(5, total)
+  } else if (current < total) {
+    replyVisible.value[commentId] = total
+  } else {
+    replyVisible.value[commentId] = 0
+  }
+}
+
 function showMoreReplies(commentId: string) {
-  const replies = loadedReplies.value[commentId]
-  if (!replies) return
-  replyVisible.value[commentId] = Math.min((replyVisible.value[commentId] || 5) + 10, replies.length)
+  const comment = comments.value.find(c => c.id === commentId)
+  if (!comment?.replies) return
+  replyVisible.value[commentId] = getAllReplies(comment.replies).length
 }
 
 function collapseReplies(commentId: string) {
-  replyVisible.value[commentId] = 5
+  replyVisible.value[commentId] = 0
 }
 
-function startReply(commentId: string, parentUserName?: string) {
-  replyingTo.value = { commentId, parentUserName }
+function startReply(commentId: string, parentUserName?: string, parentId?: string) {
+  replyingTo.value = { commentId, parentId: parentId || commentId, parentUserName }
   replyText.value = ''
   replyImages.value = []
+}
+
+function getAllReplies(replies: CommentDTO[]): (CommentDTO & { level: number })[] {
+  const result: (CommentDTO & { level: number })[] = []
+  function flatten(arr: CommentDTO[], level: number) {
+    arr.forEach(item => {
+      result.push({ ...item, level })
+      if (item.replies?.length) {
+        flatten(item.replies, level + 1)
+      }
+    })
+  }
+  flatten(replies, 1)
+  return result
+}
+
+function getTotalReplyCount(replies: CommentDTO[]): number {
+  let count = 0
+  function countRecursive(arr: CommentDTO[]) {
+    arr.forEach(item => {
+      count++
+      if (item.replies?.length) {
+        countRecursive(item.replies)
+      }
+    })
+  }
+  countRecursive(replies)
+  return count
+}
+
+function getTotalCommentCount(): number {
+  let count = comments.value.length
+  comments.value.forEach(c => {
+    count += getTotalReplyCount(c.replies || [])
+  })
+  return count
 }
 
 function cancelReply() {
@@ -265,20 +347,41 @@ async function submitReply() {
   try {
     const result = await commentApi.createComment({
       articleId: props.articleId,
-      parentId: replyingTo.value.commentId,
+      parentId: replyingTo.value.parentId,
       content: replyText.value,
       images: replyImages.value.length ? replyImages.value : undefined
     })
     if (result.code === 0 && result.data) {
       const reply = result.data
-      const parentId = replyingTo.value.commentId
-      if (!loadedReplies.value[parentId]) {
-        loadedReplies.value[parentId] = []
+      const commentId = replyingTo.value.commentId
+      const parentId = replyingTo.value.parentId
+
+      const comment = comments.value.find(c => c.id === commentId)
+      if (comment) {
+        if (parentId === commentId) {
+          comment.replies.push(reply)
+        } else {
+          const findReply = (replies: CommentDTO[]): CommentDTO | undefined => {
+            for (const r of replies) {
+              if (r.id === parentId) return r
+              if (r.replies?.length) {
+                const found = findReply(r.replies)
+                if (found) return found
+              }
+            }
+            return undefined
+          }
+          const parentReply = findReply(comment.replies)
+          if (parentReply) {
+            if (!parentReply.replies) parentReply.replies = []
+            parentReply.replies.push(reply)
+          }
+        }
       }
-      loadedReplies.value[parentId].push(reply)
-      replyVisible.value[parentId] = Math.min(
-        (replyVisible.value[parentId] || 5),
-        loadedReplies.value[parentId].length
+
+      replyVisible.value[commentId] = Math.min(
+        (replyVisible.value[commentId] || 5),
+        getAllReplies(comment?.replies || []).length + 1
       )
       replyingTo.value = null
       ElMessage.success('回复已提交')
@@ -337,7 +440,7 @@ function formatTime(dateStr: string): string {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           <span class="comment-section-title">评论</span>
-          <span class="comment-section-count">{{ commentCount }}</span>
+          <span class="comment-section-count">{{ getTotalCommentCount() }}</span>
         </div>
         <div class="comment-header-actions">
           <button class="action-pill like-pill" :class="{ liked }" :disabled="!authStore.isLoggedIn" @click="toggleLike">
@@ -402,7 +505,10 @@ function formatTime(dateStr: string): string {
         </div>
 
         <div v-for="comment in comments" :key="comment.id" class="comment-item">
-          <div class="comment-avatar">{{ (comment.userName || '匿').charAt(0).toUpperCase() }}</div>
+          <div class="comment-avatar">
+            <img v-if="comment.avatarUrl" :src="comment.avatarUrl" :alt="comment.userName" />
+            <span v-else>{{ (comment.userName || '匿').charAt(0).toUpperCase() }}</span>
+          </div>
           <div class="comment-body">
             <div class="comment-meta">
               <span class="comment-username">{{ comment.userName || '匿名' }}</span>
@@ -416,19 +522,29 @@ function formatTime(dateStr: string): string {
             <div class="comment-item-actions">
               <button class="reply-btn" @click="startReply(comment.id)">回复</button>
               <button v-if="canDelete(comment)" class="delete-btn" @click="handleDeleteComment(comment.id)">删除</button>
+              <span v-if="comment.replies?.length && (!replyVisible[comment.id] || replyVisible[comment.id] === 0)" class="toggle-link expand-arrow" @click="toggleReplies(comment.id)">
+                —— 展开{{ getTotalReplyCount(comment.replies) }}条回复
+              </span>
             </div>
 
             <!-- 回复区域 -->
-            <div v-if="loadedReplies[comment.id] && loadedReplies[comment.id].length" class="replies-section">
+            <div v-if="replyVisible[comment.id] && replyVisible[comment.id] > 0 && comment.replies?.length" class="replies-section">
               <div
-                v-for="(reply, ri) in loadedReplies[comment.id].slice(0, replyVisible[comment.id] || 0)"
+                v-for="(reply, ri) in getAllReplies(comment.replies).slice(0, replyVisible[comment.id])"
                 :key="reply.id"
                 class="reply-item"
+                :class="{ nested: reply.level > 1 }"
               >
-                <div class="reply-avatar">{{ (reply.userName || '匿').charAt(0).toUpperCase() }}</div>
+                <div class="reply-avatar">
+                  <img v-if="reply.avatarUrl" :src="reply.avatarUrl" :alt="reply.userName" />
+                  <span v-else>{{ (reply.userName || '匿').charAt(0).toUpperCase() }}</span>
+                </div>
                 <div class="reply-body">
                   <div class="reply-meta">
-                    <span class="reply-username">{{ getReplyDisplayName(reply, loadedReplies[comment.id]) }}</span>
+                    <span class="reply-username">{{ reply.userName || '匿名' }}</span>
+                    <span v-if="reply.level > 1 && reply.replyToUserName" class="reply-to">
+                      <span class="arrow-up">▲</span> {{ reply.replyToUserName }}
+                    </span>
                     <span v-if="isAuthor(reply)" class="author-badge">作者</span>
                     <span class="reply-time">{{ formatTime(reply.createdAt) }}</span>
                   </div>
@@ -437,33 +553,65 @@ function formatTime(dateStr: string): string {
                     <img v-for="(img, i) in reply.images" :key="i" :src="img" alt="reply-image" />
                   </div>
                   <div class="reply-item-actions">
-                    <button class="reply-btn" @click="startReply(comment.id, reply.userName)">回复</button>
+                    <button class="reply-btn" @click="startReply(comment.id, reply.userName, reply.id)">回复</button>
                     <button v-if="canDelete(reply)" class="delete-btn" @click="handleDeleteComment(reply.id)">删除</button>
+                  </div>
+
+                  <!-- 回复弹窗 - 回复二级回复时显示 -->
+                  <div v-if="replyingTo?.commentId === comment.id && replyingTo.parentId === reply.id" class="reply-dialog">
+                    <div class="reply-dialog-header">
+                      <span v-if="replyingTo.parentUserName">回复 @{{ replyingTo.parentUserName }}</span>
+                      <span v-else>发表回复</span>
+                      <button class="reply-dialog-close" @click="cancelReply">×</button>
+                    </div>
+                    <textarea v-model="replyText" class="reply-textarea" placeholder="写下你的回复..." rows="2"></textarea>
+                    <div v-if="replyImages.length" class="preview-images">
+                      <div v-for="(img, i) in replyImages" :key="i" class="preview-image-wrap">
+                        <img :src="img" alt="preview" />
+                        <button class="remove-img-btn" @click="replyImages.splice(i, 1)">×</button>
+                      </div>
+                    </div>
+                    <div class="reply-dialog-toolbar">
+                      <div class="toolbar-icons">
+                        <label class="toolbar-icon-btn" title="图片">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                          <input type="file" accept="image/*" hidden @change="handleReplyUploadImage" :disabled="uploadingReplyImage" />
+                        </label>
+                        <button class="toolbar-icon-btn" title="表情" @click="insertReplyEmoji">😊</button>
+                      </div>
+                      <button class="reply-submit-btn" :disabled="!replyText.trim() || submittingReply" @click="submitReply">
+                        {{ submittingReply ? '提交中...' : '提交回复' }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div class="replies-toggle">
                 <span
-                  v-if="loadedReplies[comment.id].length > (replyVisible[comment.id] || 5)"
-                  class="toggle-link"
-                  @click="showMoreReplies(comment.id)"
-                >展开更多回复</span>
+                  v-if="getAllReplies(comment.replies).length > replyVisible[comment.id]"
+                  class="toggle-link expand-arrow"
+                  @click="toggleReplies(comment.id)"
+                >—— 展开全部</span>
                 <span
-                  v-if="(replyVisible[comment.id] || 0) > 5"
-                  class="toggle-link"
+                  v-if="getAllReplies(comment.replies).length > replyVisible[comment.id]"
+                  class="toggle-link collapse-link collapse-arrow"
                   @click="collapseReplies(comment.id)"
-                >收起</span>
+                >—— 收起</span>
+                <span
+                  v-if="replyVisible[comment.id] >= getAllReplies(comment.replies).length"
+                  class="toggle-link collapse-link collapse-arrow"
+                  @click="collapseReplies(comment.id)"
+                >—— 收起</span>
               </div>
             </div>
 
-            <div v-if="!loadedReplies[comment.id] && !loadingReplies[comment.id]" class="replies-toggle">
-              <span class="toggle-link" @click="loadReplies(comment.id)">查看回复</span>
-            </div>
-            <div v-if="loadingReplies[comment.id]" class="replies-loading">加载中...</div>
-
-            <!-- 回复弹窗 -->
-            <div v-if="replyingTo?.commentId === comment.id" class="reply-dialog">
+            <!-- 回复弹窗 - 回复一级评论时显示 -->
+            <div v-if="replyingTo?.commentId === comment.id && replyingTo.parentId === comment.id" class="reply-dialog">
               <div class="reply-dialog-header">
                 <span v-if="replyingTo.parentUserName">回复 @{{ replyingTo.parentUserName }}</span>
                 <span v-else>发表回复</span>
@@ -825,6 +973,13 @@ function formatTime(dateStr: string): string {
   font-weight: 700;
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
 }
 
 .comment-body {
@@ -893,6 +1048,10 @@ function formatTime(dateStr: string): string {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+
+  .toggle-link {
+    margin-left: auto;
+  }
 }
 
 .reply-btn {
@@ -950,9 +1109,16 @@ function formatTime(dateStr: string): string {
   font-size: 0.7rem;
   font-weight: 700;
   flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
 }
 
-.reply-body { flex: 1; min-width: 0; }
+.reply-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .reply-meta {
   display: flex;
@@ -972,6 +1138,30 @@ function formatTime(dateStr: string): string {
   font-size: 0.7rem;
   color: var(--color-text-secondary);
   margin-left: auto;
+}
+
+.reply-to {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  .arrow-up {
+    transform: rotate(-180deg);
+    font-size: 0.65rem;
+  }
+}
+
+.reply-item.nested {
+  padding: 0.4rem 0;
+  border-top: 1px dashed var(--color-border-light);
+
+  &:first-child {
+    padding-top: 0.4rem;
+    border-top: none;
+  }
 }
 
 .reply-content {
@@ -1004,16 +1194,47 @@ function formatTime(dateStr: string): string {
   padding: 0.375rem 0;
   display: flex;
   gap: 1rem;
+  align-items: center;
+
+  .collapse-link {
+    margin-left: auto;
+  }
 }
 
 .toggle-link {
   font-size: 0.8rem;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-weight: 500;
-  transition: opacity 0.2s;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
 
-  &:hover { opacity: 0.8; }
+  &:hover { color: var(--color-accent); }
+
+  &.expand-arrow::after {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  &.collapse-arrow::after {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-135deg);
+    margin-left: 4px;
+    vertical-align: middle;
+  }
 }
 
 .replies-loading {
@@ -1029,6 +1250,7 @@ function formatTime(dateStr: string): string {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: 10px;
+  align-self: stretch;
 }
 
 .reply-dialog-header {

@@ -121,3 +121,8 @@ export async function deleteTag(id: string): Promise<Result<void>> {
   const response = await axios.delete(`/v1/tags/${id}`)
   return response.data
 }
+
+export async function getLatestArticleTime(): Promise<Result<{ latestTime: string | null }>> {
+  const response = await axios.get('/v1/articles/latest-time')
+  return response.data
+}

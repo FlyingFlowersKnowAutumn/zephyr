@@ -105,7 +105,7 @@ function initMeteors(width: number, height: number) {
 function createMeteor(width: number, height: number, randomY = false): Meteor {
   const depth = Math.random()
   const size = depth * 1.5 + 0.5
-  const baseSpeed = 0.8
+  const baseSpeed = 0.35
   const speed = baseSpeed * (depth * 1.5 + 0.3)
   
   return {

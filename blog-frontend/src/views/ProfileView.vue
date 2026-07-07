@@ -217,7 +217,7 @@ function handleDrop(event: DragEvent) {
 }
 
 function validateAndSelectFile(file: File) {
-  const maxSize = 2 * 1024 * 1024
+  const maxSize = 5 * 1024 * 1024
   const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
   
   if (!validTypes.includes(file.type)) {
@@ -226,7 +226,7 @@ function validateAndSelectFile(file: File) {
   }
   
   if (file.size > maxSize) {
-    alert('图片大小不能超过 2MB')
+    alert('图片大小不能超过 5MB')
     return
   }
   

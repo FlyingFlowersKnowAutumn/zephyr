@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 @Data
@@ -17,10 +17,12 @@ public class CommentDTO {
     private String articleId;
     private String userId;
     private String userName;
+    private String avatarUrl;
     private String parentId;
+    private String replyToUserName;
     private String content;
     private String status;
     private List<CommentDTO> replies;
     private List<String> images;
-    private LocalDateTime createdAt;
+    private ZonedDateTime createdAt;
 }

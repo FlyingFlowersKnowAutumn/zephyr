@@ -40,7 +40,7 @@ function initMeteors(width: number, height: number) {
 function createMeteor(width: number, height: number, randomY = false): Meteor {
   const depth = Math.random()
   const size = depth * 1.5 + 0.5
-  const baseSpeed = 0.8
+  const baseSpeed = 0.35
   const speed = baseSpeed * (depth * 1.5 + 0.3)
   
   return {
@@ -406,6 +406,14 @@ function formatDate(dateString: string) {
       .meta-icon {
         width: 16px;
         height: 16px;
+      }
+    }
+
+    .category-link {
+      color: rgba(255, 255, 255, 0.97);
+      transition: color 0.3s ease;
+      &:hover {
+        color: rgb(0, 251, 255);
       }
     }
   }
@@ -854,7 +862,7 @@ html.dark .markdown-body {
   }
 
   pre {
-    background: #0d1b2a;
+    background: #161b22;
     border-color: #30363d;
     code { color: #c9d1d9; }
   }

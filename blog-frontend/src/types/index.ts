@@ -130,7 +130,9 @@ export interface CommentDTO {
   articleId: string
   userId: string
   userName?: string
+  avatarUrl?: string
   parentId?: string
+  replyToUserName?: string
   content: string
   status: string
   images?: string[]

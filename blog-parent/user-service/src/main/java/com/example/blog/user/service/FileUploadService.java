@@ -92,8 +92,8 @@ public class FileUploadService {
             throw new IllegalArgumentException("只支持 jpg、jpeg、png、gif、webp 格式的图片");
         }
         
-        if (file.getSize() > 2 * 1024 * 1024) {
-            throw new IllegalArgumentException("图片大小不能超过 2MB");
+        if (file.getSize() > 5 * 1024 * 1024) {
+            throw new IllegalArgumentException("图片大小不能超过 5MB");
         }
     }
 

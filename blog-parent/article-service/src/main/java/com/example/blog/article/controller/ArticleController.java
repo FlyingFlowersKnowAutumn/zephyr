@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +48,9 @@ public class ArticleController {
 
     @GetMapping("/slug/{slug}")
     public Result<ArticleDTO> getArticleBySlug(@PathVariable String slug) {
-        return Result.success(articleService.getArticleBySlug(slug));
+        ArticleDTO article = articleService.getArticleBySlug(slug);
+        articleService.incrementViewCount(article.getId());
+        return Result.success(article);
     }
 
     @GetMapping
@@ -122,5 +125,14 @@ public class ArticleController {
     @GetMapping("/tags/count")
     public Result<List<Map<String, Object>>> getTagsWithCount() {
         return Result.success(articleService.getAllTagsWithCount());
+    }
+
+    @GetMapping("/latest-time")
+    public Result<Map<String, String>> getLatestArticleTime() {
+        LocalDateTime time = articleService.getLatestArticleTime();
+        Map<String, String> result = Map.of(
+                "latestTime", time != null ? time.atZone(java.time.ZoneId.of("Asia/Shanghai")).toOffsetDateTime().toString() : null
+        );
+        return Result.success(result);
     }
 }

@@ -30,6 +30,11 @@ public class UserProfileController {
         return Result.success(userProfileService.getProfile(userId));
     }
 
+    @GetMapping("/{userId}/profile/info")
+    public Result<UserProfileDTO> getProfileInfo(@PathVariable UUID userId) {
+        return Result.success(userProfileService.getProfile(userId));
+    }
+
     @PutMapping("/{userId}/profile")
     public Result<UserProfileDTO> updateProfile(
             @PathVariable UUID userId,

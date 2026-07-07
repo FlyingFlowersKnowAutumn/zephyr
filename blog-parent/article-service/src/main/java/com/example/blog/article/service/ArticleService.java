@@ -223,9 +223,39 @@ public class ArticleService {
             }
         }
         if (dto.getCategoryId() != null) {
+            String oldCategoryId = article.getCategoryId();
+            String newCategoryId = dto.getCategoryId();
+            if (article.getStatus() == ArticleStatus.PUBLISHED) {
+                if (oldCategoryId != null && !oldCategoryId.isBlank() && !oldCategoryId.equals(newCategoryId)) {
+                    categoryService.decrementArticleCount(oldCategoryId);
+                }
+                if (newCategoryId != null && !newCategoryId.isBlank() && !newCategoryId.equals(oldCategoryId)) {
+                    categoryService.incrementArticleCount(newCategoryId);
+                }
+            }
             article.setCategoryId(dto.getCategoryId());
         }
         if (dto.getTags() != null) {
+            List<String> oldTags = article.getTags() != null ? article.getTags() : List.of();
+            List<String> newTags = dto.getTags() != null ? dto.getTags() : List.of();
+            if (article.getStatus() == ArticleStatus.PUBLISHED) {
+                for (String oldTag : oldTags) {
+                    if (!newTags.contains(oldTag)) {
+                        try {
+                            Tag tag = tagService.getTagByName(oldTag);
+                            tagService.decrementArticleCount(tag.getId());
+                        } catch (BusinessException ignored) {}
+                    }
+                }
+                for (String newTag : newTags) {
+                    if (!oldTags.contains(newTag)) {
+                        try {
+                            Tag tag = tagService.getTagByName(newTag);
+                            tagService.incrementArticleCount(tag.getId());
+                        } catch (BusinessException ignored) {}
+                    }
+                }
+            }
             article.setTags(dto.getTags());
         }
 
@@ -241,6 +271,18 @@ public class ArticleService {
 
         if (!isAdmin && !article.getAuthorId().equals(authorId)) {
             throw BusinessException.forbidden("无权删除此文章");
+        }
+
+        if (article.getStatus() == ArticleStatus.PUBLISHED) {
+            if (article.getCategoryId() != null && !article.getCategoryId().isBlank()) {
+                categoryService.decrementArticleCount(article.getCategoryId());
+            }
+            for (String tagName : article.getTags()) {
+                try {
+                    Tag tag = tagService.getTagByName(tagName);
+                    tagService.decrementArticleCount(tag.getId());
+                } catch (BusinessException ignored) {}
+            }
         }
 
         articleRepository.delete(article);
@@ -295,6 +337,11 @@ public class ArticleService {
     @Transactional(readOnly = true)
     public List<String> getAllTags() {
         return articleRepository.findAllTags();
+    }
+
+    @Transactional(readOnly = true)
+    public LocalDateTime getLatestArticleTime() {
+        return articleRepository.findLatestArticleTime(ArticleStatus.PUBLISHED);
     }
 
     private String ensureUniqueSlug(String providedSlug, String title) {
