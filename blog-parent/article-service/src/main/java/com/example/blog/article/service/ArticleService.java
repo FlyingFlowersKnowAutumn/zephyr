@@ -16,6 +16,7 @@ import com.example.blog.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +77,7 @@ public class ArticleService {
                 .categoryName(categoryName)
                 .tags(dto.getTags() != null ? dto.getTags() : List.of())
                 .publishedAt(publishedAt)
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         Article saved = articleRepository.save(article);
@@ -149,7 +151,7 @@ public class ArticleService {
         } else if (categoryId != null) {
             page = articleRepository.findByCategoryIdAndStatus(categoryId, status, pageable);
         } else if (keyword != null && !keyword.isBlank()) {
-            page = articleRepository.searchByTsVector(keyword.trim(), status.name(), pageable);
+            page = articleRepository.searchByTitle(keyword.trim(), status, pageable);
         } else {
             page = articleRepository.findByStatus(status, pageable);
         }
@@ -258,6 +260,8 @@ public class ArticleService {
             }
             article.setTags(dto.getTags());
         }
+
+        article.setUpdatedAt(LocalDateTime.now());
 
         Article updated = articleRepository.save(article);
         log.info("Article updated: id={}, title={}", updated.getId(), updated.getTitle());

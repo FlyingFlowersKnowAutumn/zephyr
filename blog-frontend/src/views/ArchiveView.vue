@@ -130,7 +130,15 @@ onMounted(async () => {
                     </svg>
                   </div>
                   <div class="article-info">
-                    <span class="article-date">{{ formatDate(article.publishedAt || article.createdAt) }}</span>
+                    <span class="article-date">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                      <span>{{ formatDate(article.publishedAt || article.createdAt) }}</span>
+                    </span>
                     <h3 class="article-title">{{ article.title }}</h3>
                   </div>
                 </RouterLink>
@@ -388,7 +396,10 @@ onMounted(async () => {
 .article-date {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .article-title {

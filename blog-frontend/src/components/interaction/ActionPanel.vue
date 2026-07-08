@@ -71,6 +71,10 @@ watch(() => props.articleId, async (newId) => {
   replyingTo.value = null
   replyText.value = ''
   replyImages.value = []
+  liked.value = false
+  likeCount.value = 0
+  favorited.value = false
+  favoriteCount.value = 0
   await loadDataForArticle(newId)
 }, { immediate: false })
 
@@ -79,27 +83,36 @@ async function loadData() {
 }
 
 async function loadDataForArticle(articleId: string) {
-  const [commentResult, favoriteResult, reactionResult] = await Promise.all([
-    commentApi.getComments(articleId, 0, 20),
-    favoriteApi.getFavoriteStatus(articleId),
-    reactionApi.getReactionStatus(articleId)
-  ])
+  liked.value = false
+  likeCount.value = 0
+  favorited.value = false
+  favoriteCount.value = 0
 
-  if (commentResult.code === 0 && commentResult.data) {
-    comments.value = commentResult.data.content
-    hasMoreComments.value = commentResult.data.totalPages > 1
-    commentPage.value = 0
-    commentCount.value = commentResult.data.totalElements
-  }
+  try {
+    const [commentResult, favoriteResult, reactionResult] = await Promise.all([
+      commentApi.getComments(articleId, 0, 20),
+      favoriteApi.getFavoriteStatus(articleId),
+      reactionApi.getReactionStatus(articleId)
+    ])
 
-  if (favoriteResult.code === 0 && favoriteResult.data) {
-    favorited.value = favoriteResult.data.favorited
-    favoriteCount.value = favoriteResult.data.favoriteCount
-  }
+    if (commentResult.code === 0 && commentResult.data) {
+      comments.value = commentResult.data.content
+      hasMoreComments.value = commentResult.data.totalPages > 1
+      commentPage.value = 0
+      commentCount.value = commentResult.data.totalElements
+    }
 
-  if (reactionResult.code === 0 && reactionResult.data) {
-    liked.value = reactionResult.data.liked
-    likeCount.value = reactionResult.data.likeCount
+    if (favoriteResult.code === 0 && favoriteResult.data) {
+      favorited.value = !!favoriteResult.data.favorited
+      favoriteCount.value = favoriteResult.data.favoriteCount || 0
+    }
+
+    if (reactionResult.code === 0 && reactionResult.data) {
+      liked.value = !!reactionResult.data.liked
+      likeCount.value = reactionResult.data.likeCount || 0
+    }
+  } catch (error) {
+    console.error('Failed to load article data:', error)
   }
 
   await nextTick()
@@ -730,14 +743,13 @@ function formatTime(dateStr: string): string {
     color: #ef4444;
     border-color: rgba(239, 68, 68, 0.3);
     background: rgba(239, 68, 68, 0.05);
-    .pill-count { background: rgba(239, 68, 68, 0.1); }
   }
 
   &.liked {
     color: #ef4444;
     border-color: rgba(239, 68, 68, 0.3);
     background: rgba(239, 68, 68, 0.08);
-    .pill-count { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .pill-count { color: #ef4444; }
     svg { fill: #ef4444; }
   }
 }
@@ -747,14 +759,13 @@ function formatTime(dateStr: string): string {
     color: #f59e0b;
     border-color: rgba(245, 158, 11, 0.3);
     background: rgba(245, 158, 11, 0.05);
-    .pill-count { background: rgba(245, 158, 11, 0.1); }
   }
 
   &.favorited {
     color: #f59e0b;
     border-color: rgba(245, 158, 11, 0.3);
     background: rgba(245, 158, 11, 0.08);
-    .pill-count { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .pill-count { color: #f59e0b; }
     svg { fill: #f59e0b; }
   }
 }
@@ -1006,7 +1017,7 @@ function formatTime(dateStr: string): string {
   padding: 1px 7px;
   font-size: 0.7rem;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: #ef4444;
   border-radius: 4px;
   font-weight: 600;
 }

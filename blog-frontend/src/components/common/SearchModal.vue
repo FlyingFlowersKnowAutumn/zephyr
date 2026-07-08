@@ -3,16 +3,16 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import DOMPurify from 'dompurify'
 import { useRouter } from 'vue-router'
-import { listArticles, listCategories, listTags } from '@/api/article'
-import type { ArticleDTO, CategoryDTO, TagDTO } from '@/types'
+import { listArticles } from '@/api/article'
+import type { ArticleDTO } from '@/types'
 
 interface Props {
   isOpen: boolean
 }
 
 interface SearchResult {
-  type: 'article' | 'category' | 'tag'
-  data: ArticleDTO | CategoryDTO | TagDTO
+  type: 'article'
+  data: ArticleDTO
 }
 
 const props = defineProps<Props>()
@@ -24,6 +24,7 @@ const router = useRouter()
 const searchInput = ref<HTMLInputElement | null>(null)
 const searchQuery = ref('')
 const searchResults = ref<SearchResult[]>([])
+const totalArticles = ref(0)
 const isLoading = ref(false)
 const selectedIndex = ref(-1)
 
@@ -36,36 +37,13 @@ const debouncedSearch = useDebounceFn(async (keyword: string) => {
   isLoading.value = true
 
   try {
-    const [articleRes, categoryRes, tagRes] = await Promise.all([
-      listArticles({ keyword, page: 1, size: 6 }),
-      listCategories(),
-      listTags()
-    ])
+    const articleRes = await listArticles({ keyword, page: 0, size: 50 })
 
     const results: SearchResult[] = []
 
-    if (categoryRes.code === 200 && categoryRes.data) {
-      const categories = categoryRes.data as CategoryDTO[]
-      const matchedCategories = categories.filter(cat => 
-        cat.name.toLowerCase().includes(keyword.toLowerCase())
-      )
-      matchedCategories.forEach(cat => {
-        results.push({ type: 'category', data: cat })
-      })
-    }
-
-    if (tagRes.code === 200 && tagRes.data) {
-      const tags = tagRes.data as TagDTO[]
-      const matchedTags = tags.filter(tag => 
-        tag.name.toLowerCase().includes(keyword.toLowerCase())
-      )
-      matchedTags.forEach(tag => {
-        results.push({ type: 'tag', data: tag })
-      })
-    }
-
-    if (articleRes.code === 200 && articleRes.data) {
+    if (articleRes.code === 0 && articleRes.data) {
       const articles = articleRes.data.content || []
+      totalArticles.value = articleRes.data.totalElements || articles.length
       articles.forEach(article => {
         results.push({ type: 'article', data: article })
       })
@@ -73,6 +51,7 @@ const debouncedSearch = useDebounceFn(async (keyword: string) => {
 
     searchResults.value = results
   } catch (error) {
+    console.error('Search API error:', error)
     searchResults.value = []
   } finally {
     isLoading.value = false
@@ -91,6 +70,9 @@ watch(() => props.isOpen, (isOpen) => {
     })
     searchQuery.value = ''
     searchResults.value = []
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
   }
 })
 
@@ -125,20 +107,40 @@ function handleKeydown(e: KeyboardEvent) {
 function handleResultClick(result: SearchResult) {
   emit('close')
   
-  switch (result.type) {
-    case 'article':
-      const article = result.data as ArticleDTO
-      router.push(`/article/${article.slug}`)
-      break
-    case 'category':
-      const category = result.data as CategoryDTO
-      router.push({ path: '/categories', query: { category: category.name } })
-      break
-    case 'tag':
-      const tag = result.data as TagDTO
-      router.push({ path: '/tags', query: { tag: tag.name } })
-      break
+  const article = result.data as ArticleDTO
+  router.push(`/articles/${article.slug || article.id}`)
+}
+
+function extractRelevantSentence(content: string, keyword: string): string {
+  if (!content || !keyword.trim()) return ''
+
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(escapedKeyword, 'gi')
+
+  const sentences = content.split(/[。！？.!?]/)
+  
+  let bestSentence = ''
+  let maxCount = 0
+
+  sentences.forEach(sentence => {
+    const matches = sentence.match(regex)
+    const count = matches ? matches.length : 0
+    if (count > maxCount && sentence.trim().length > 5) {
+      maxCount = count
+      bestSentence = sentence.trim()
+    }
+  })
+
+  if (!bestSentence && sentences.length > 0) {
+    for (const sentence of sentences) {
+      if (sentence.trim().length > 5) {
+        bestSentence = sentence.trim()
+        break
+      }
+    }
   }
+
+  return bestSentence
 }
 
 function highlightKeyword(text: string, keyword: string): string {
@@ -150,6 +152,19 @@ function highlightKeyword(text: string, keyword: string): string {
   return DOMPurify.sanitize(highlighted)
 }
 
+function getSearchSummary(article: ArticleDTO, keyword: string): string {
+  const content = article.content || ''
+  const excerpt = article.excerpt || ''
+  
+  const relevantSentence = extractRelevantSentence(content, keyword)
+  
+  if (relevantSentence) {
+    return highlightKeyword(relevantSentence, keyword)
+  }
+  
+  return highlightKeyword(excerpt, keyword)
+}
+
 function formatDate(dateString: string): string {
   const date = new Date(dateString)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -159,15 +174,7 @@ function handleHotSearch(keyword: string) {
   searchQuery.value = keyword
 }
 
-function goToCategory(name: string) {
-  emit('close')
-  router.push({ path: '/categories', query: { category: name } })
-}
 
-function goToTag(name: string) {
-  emit('close')
-  router.push({ path: '/tags', query: { tag: name } })
-}
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
@@ -195,7 +202,7 @@ onUnmounted(() => {
               v-model="searchQuery"
               type="text"
               class="search-input"
-              placeholder="输入关键词搜索文章、分类或标签..."
+              placeholder="搜索文章..."
             />
             <button class="close-btn" @click="emit('close')">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -220,27 +227,23 @@ onUnmounted(() => {
                 @click="handleResultClick(result)"
                 @mouseenter="selectedIndex = index"
               >
-                <div class="result-header">
-                  <span class="result-type" :class="result.type">
-                    {{ result.type === 'category' ? '分类' : result.type === 'tag' ? '标签' : '文章' }}
-                  </span>
+                <div class="result-content">
+                  <span class="result-number">{{ index + 1 }}.</span>
+                  <div class="result-text">
+                    <h3 class="result-title" v-html="highlightKeyword(result.data.title, searchQuery)"></h3>
+                    <p class="result-summary" v-html="getSearchSummary(result.data, searchQuery)"></p>
+                  </div>
                 </div>
-                <template v-if="result.type === 'article'">
-                  <h3 class="result-title" v-html="highlightKeyword((result.data as ArticleDTO).title, searchQuery)"></h3>
-                  <p class="result-summary" v-html="highlightKeyword((result.data as ArticleDTO).excerpt || '', searchQuery)"></p>
-                  <span class="result-date">{{ formatDate((result.data as ArticleDTO).createdAt) }}</span>
-                </template>
-                <template v-else>
-                  <h3 class="result-title" v-html="highlightKeyword((result.data as CategoryDTO | TagDTO).name, searchQuery)"></h3>
-                  <p class="result-summary">
-                    {{ result.type === 'category' ? `查看该分类下的文章` : `查看该标签下的文章` }}
-                  </p>
-                </template>
               </div>
             </div>
 
             <div v-else-if="searchQuery" class="no-results">
-              未找到相关内容，请尝试其他关键词
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="no-results-icon">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <p>未找到相关文章</p>
+              <p class="no-results-hint">试试其他关键词？</p>
             </div>
 
             <div v-else class="search-tips">
@@ -255,6 +258,11 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div v-if="searchResults.length > 0" class="search-footer">
+            <div class="footer-divider"></div>
+            <div class="footer-count">共找到 {{ totalArticles }} 篇文章</div>
           </div>
         </div>
       </div>
@@ -280,11 +288,14 @@ onUnmounted(() => {
 .search-modal-container {
   width: 100%;
   max-width: 620px;
+  max-height: calc(100vh - 2 * (60px + 2rem));
   background: var(--color-bg-card, #ffffff);
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  display: flex;
+  flex-direction: column;
 }
 
 .search-box {
@@ -303,13 +314,13 @@ onUnmounted(() => {
   left: 2rem;
   right: 2rem;
   height: 1px;
-  background: var(--color-border, rgba(0, 0, 0, 0.08));
-  transition: opacity 0.3s ease;
-}
-
-.search-box:focus-within::after {
-  background: var(--color-accent, #00d4ff);
-  opacity: 0.4;
+  background: repeating-linear-gradient(
+    to right,
+    transparent,
+    transparent 8px,
+    var(--color-border, rgba(0, 0, 0, 0.1)) 8px,
+    var(--color-border, rgba(0, 0, 0, 0.1)) 12px
+  );
 }
 
 .search-icon-wrapper {
@@ -383,7 +394,7 @@ onUnmounted(() => {
 }
 
 .search-results {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
 }
 
@@ -416,75 +427,88 @@ onUnmounted(() => {
 }
 
 .no-results {
-  padding: 2rem;
+  padding: 3rem 2rem;
   text-align: center;
   color: var(--color-text-secondary, #999);
+
+  .no-results-icon {
+    color: var(--color-text-secondary, #999);
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+  }
+
+  .no-results-hint {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    margin-bottom: 0;
+  }
 }
 
 .results-list {
-  padding: 0.5rem;
+  padding: 0.5rem 1.5rem;
 }
 
 .result-item {
-  padding: 1rem;
-  border-radius: 12px;
+  padding: 0.75rem 0;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover,
   &.active {
     background: var(--color-hover-bg, #f8f9fa);
+
+    .result-number {
+      color: #3498db;
+    }
+
+    .result-title {
+      color: #3498db;
+    }
   }
 }
 
-.result-header {
-  margin-bottom: 0.5rem;
+.result-content {
+  display: flex;
+  gap: 0.75rem;
 }
 
-.result-type {
-  font-size: 0.75rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  font-weight: 500;
+.result-number {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #999);
+  flex-shrink: 0;
+  line-height: 1.5;
+}
 
-  &.category {
-    background: rgba(52, 152, 219, 0.1);
-    color: #3498db;
-  }
-
-  &.tag {
-    background: rgba(155, 89, 182, 0.1);
-    color: #9b59b6;
-  }
-
-  &.article {
-    background: rgba(46, 204, 113, 0.1);
-    color: #2ecc71;
-  }
+.result-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .result-title {
   font-size: 1rem;
   font-weight: 600;
   color: var(--color-text-primary, #1a1a1a);
-  margin: 0 0 0.5rem 0;
-  line-height: 1.4;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.5;
+  transition: color 0.2s;
 }
 
 .result-summary {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--color-text-secondary, #666);
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.result-date {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary, #999);
 }
 
 .search-tips {
@@ -576,11 +600,34 @@ onUnmounted(() => {
   }
 }
 
+.search-footer {
+  padding: 0.75rem 2rem 1rem;
+  flex-shrink: 0;
+}
+
+.footer-divider {
+  height: 1px;
+  background: repeating-linear-gradient(
+    to right,
+    transparent,
+    transparent 8px,
+    var(--color-border, rgba(0, 0, 0, 0.1)) 8px,
+    var(--color-border, rgba(0, 0, 0, 0.1)) 12px
+  );
+  margin-bottom: 0.75rem;
+}
+
+.footer-count {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #999);
+  text-align: center;
+}
+
 :deep(mark) {
-  background: rgba(0, 212, 255, 0.3);
-  color: var(--color-text-primary, #856404);
-  padding: 0 4px;
-  border-radius: 2px;
+  background: transparent;
+  color: #ff6b35;
+  padding: 0;
+  border-radius: 0;
 }
 
 .fade-enter-active,

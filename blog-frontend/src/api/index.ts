@@ -12,6 +12,9 @@ instance.interceptors.request.use(
     if (authStore.token) {
       config.headers.Authorization = `Bearer ${authStore.token}`
     }
+    if (authStore.user?.id) {
+      config.headers['X-User-Id'] = authStore.user.id
+    }
     return config
   },
   error => {

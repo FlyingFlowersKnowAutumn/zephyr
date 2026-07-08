@@ -4,8 +4,7 @@ import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
 import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
-import ArticleCard from '@/components/common/ArticleCard.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import type { CategoryDTO } from '@/types'
 
 const showCreateModal = ref(false)
@@ -19,6 +18,16 @@ const categories = ref<CategoryDTO[]>([])
 const articles = ref<any[]>([])
 const selectedCategory = ref('')
 const loading = ref(true)
+
+function formatDate(dateString?: string) {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
 
 const filteredArticles = computed(() => {
   if (!selectedCategory.value) return articles.value
@@ -141,16 +150,39 @@ onMounted(async () => {
           </div>
 
           <div v-else class="articles-list">
-            <div v-if="selectedCategory" class="selected-header">
-              <h2>{{ selectedCategory }}</h2>
+            <div class="articles-header">
+              <h2>全部文章</h2>
               <span class="article-count">{{ filteredArticles.length }} 篇文章</span>
             </div>
-            <ArticleCard 
-              v-for="(article, index) in filteredArticles" 
-              :key="article.id" 
-              :article="article"
-              :index="index"
-            />
+            <article
+              v-for="article in filteredArticles"
+              :key="article.id"
+              class="archive-article"
+            >
+              <RouterLink :to="`/articles/${article.slug || article.id}`" class="article-link">
+                <div class="article-cover" v-if="article.coverImage">
+                  <img :src="article.coverImage" :alt="article.title" />      
+                </div>
+                <div class="article-cover placeholder" v-else>
+                  <svg width="100%" height="100%" viewBox="0 0 200 120" fill="none">
+                    <rect width="200" height="120" fill="var(--color-bg-secondary)"/>
+                    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="var(--color-text-secondary)" font-size="12">暂无封面</text>
+                  </svg>
+                </div>
+                <div class="article-info">
+                  <span class="article-date">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    <span>{{ formatDate(article.publishedAt || article.createdAt) }}</span>
+                  </span>
+                  <h3 class="article-title">{{ article.title }}</h3>
+                </div>
+              </RouterLink>
+            </article>
           </div>
         </div>
       </div>
@@ -391,13 +423,14 @@ onMounted(async () => {
 .articles-main {
   flex: 1;
   min-width: 0;
+  padding-top: 0.4rem;
 }
 
-.selected-header {
+.articles-header {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--color-border);
 
@@ -420,9 +453,81 @@ onMounted(async () => {
 .articles-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  gap: 0.75rem;
+}
+
+.archive-article {
+  background: var(--color-bg-card);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all var(--transition-default);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.article-link {
+  display: flex;
+  text-decoration: none;
+  color: inherit;
+}
+
+.article-cover {
+  width: 210px;
+  height: 100px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-default);
+  }
+
+  &:hover img {
+    transform: scale(1.05);
+  }
+
+  &.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-secondary);
+  }
+}
+
+.article-info {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.article-date {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.article-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  transition: color var(--transition-default);
+
+  &:hover {
+    color: var(--color-accent);
+  }
 }
 
 @media (max-width: 768px) {
@@ -452,6 +557,23 @@ onMounted(async () => {
 
   .category-dot {
     display: none;
+  }
+
+  .article-link {
+    flex-direction: column;
+  }
+
+  .article-cover {
+    width: 100%;
+    height: 150px;
+  }
+
+  .article-info {
+    padding: 1rem;
+  }
+
+  .article-title {
+    font-size: 1.1rem;
   }
 }
 

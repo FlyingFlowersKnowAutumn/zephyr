@@ -30,7 +30,11 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
     @Query("SELECT a FROM Article a WHERE a.status = :status AND a.publishedAt IS NOT NULL ORDER BY a.publishedAt DESC")
     Page<Article> findPublishedArticles(@Param("status") ArticleStatus status, Pageable pageable);
     
-    @Query("SELECT a FROM Article a WHERE a.status = :status AND a.title LIKE %:keyword% ORDER BY a.publishedAt DESC")
+    @Query("SELECT a FROM Article a WHERE a.status = :status AND (" +
+           "LOWER(a.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(a.content) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(a.excerpt) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY a.publishedAt DESC")
     Page<Article> searchByTitle(@Param("keyword") String keyword, @Param("status") ArticleStatus status, Pageable pageable);
     
     @Query("SELECT a FROM Article a WHERE a.status = :status ORDER BY a.createdAt DESC")
@@ -70,6 +74,13 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
            countQuery = "SELECT count(*) FROM articles WHERE status = :status AND search_vector @@ plainto_tsquery('simple', :query)",
            nativeQuery = true)
     Page<Article> searchByTsVector(@Param("query") String query, @Param("status") String status, Pageable pageable);
+
+    @Query("SELECT a FROM Article a WHERE a.status = :status AND (" +
+           "LOWER(a.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(a.content) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(a.excerpt) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY a.publishedAt DESC")
+    Page<Article> searchByKeyword(@Param("keyword") String keyword, @Param("status") ArticleStatus status, Pageable pageable);
 
     @Query("SELECT MAX(COALESCE(a.updatedAt, a.publishedAt, a.createdAt)) FROM Article a WHERE a.status = :status")
     LocalDateTime findLatestArticleTime(@Param("status") ArticleStatus status);
