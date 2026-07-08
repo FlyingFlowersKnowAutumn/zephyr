@@ -273,7 +273,7 @@ onUnmounted(() => {
     <div class="login-wrapper">
       <div class="left-section">
         <div class="image-container">
-          <img src="/blog.png" alt="背景图" />
+          <img src="/2.png" alt="背景图" />
         </div>
       </div>
       
@@ -472,7 +472,7 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .login-container {
   min-height: 100vh;
-  background-image: url('/dl.png');
+  background-image: url('/1.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
