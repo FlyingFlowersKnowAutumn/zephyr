@@ -2,7 +2,6 @@
 import { onMounted, onUnmounted, computed, ref, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
-import { useAuthStore } from '@/stores/auth'
 import { getArticle, getArticleBySlug } from '@/api/article'
 import { renderMarkdown } from '@/utils/markdown'
 import SeoHead from '@/components/seo/SeoHead.vue'
@@ -144,7 +143,6 @@ function stopMeteorAnimation() {
 const router = useRouter()
 const route = useRoute()
 const articleStore = useArticleStore()
-const authStore = useAuthStore()
 
 const slugParam = computed(() => route.params.slug as string)
 const article = computed(() => articleStore.currentArticle)
@@ -189,10 +187,6 @@ onUnmounted(() => {
 
 function goBack() {
   router.back()
-}
-
-function handleEdit() {
-  router.push(`/articles/${slugParam.value}/edit`)
 }
 
 function formatDate(dateString: string) {

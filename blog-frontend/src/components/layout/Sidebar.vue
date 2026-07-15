@@ -3,10 +3,9 @@ import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useAuthStore } from '@/stores/auth'
-import { listCategories, listTags, getLatestArticleTime } from '@/api/article'
-import { getUserProfile, getAnnouncement, updateAnnouncement } from '@/api/profile'
-import { getSiteStats } from '@/api/site'
-import { generateTocFromMarkdown, generateTocFromHtml, scrollToHeading, type TocItem } from '@/utils/toc'
+import { useSidebarStore } from '@/stores/sidebar'
+import { updateAnnouncement } from '@/api/profile'
+import { generateTocFromMarkdown, scrollToHeading, type TocItem } from '@/utils/toc'
 import type { CategoryDTO, TagDTO } from '@/types'
 
 interface Props {
@@ -114,7 +113,7 @@ function extractTocFromDom() {
     const text = heading.textContent?.trim()
     
     if (id && text) {
-      items.push({ id, text, level })
+      items.push({ id, text, level, lineNumber: 0 })
     }
   })
   
@@ -188,18 +187,13 @@ function getTocIndent(level: number): string {
   return indents[level] || '0'
 }
 
-const BLOGGER_ID = '6e2ca12d-5d59-43ee-a0b3-c7f50127fef8'
+const BLOGGER_ID = '243c28e9-40f4-492c-a271-5451fa2d8171'
 
 const articleStore = useArticleStore()
 const authStore = useAuthStore()
+const sidebarStore = useSidebarStore()
 const categories = ref<CategoryDTO[]>([])
 const tags = ref<TagDTO[]>([])
-const bloggerProfile = ref<{ avatarUrl?: string; displayName?: string; bio?: string } | null>(null)
-const stats = ref({
-  articles: 0,
-  categories: 0,
-  tags: 0
-})
 const latestArticles = ref<any[]>([])
 const archiveYears = ref<{ year: string; count: number }[]>([])
 const tagColors: Record<string, string> = {}
@@ -227,24 +221,10 @@ const profile = computed(() => {
       bio: authStore.user.bio || '记录技术与生活'
     }
   }
-  if (bloggerProfile.value) {
-    return {
-      avatar: bloggerProfile.value.avatarUrl || null,
-      name: bloggerProfile.value.displayName || '博主',
-      bio: bloggerProfile.value.bio || '记录技术与生活'
-    }
-  }
-  return {
-    avatar: null,
-    name: '博主名字',
-    bio: '记录技术与生活'
-  }
+  return sidebarStore.profile
 })
 
-const announcement = ref({
-  title: '公告',
-  content: '即使再小的帆也能远航⛵'
-})
+const announcement = computed(() => sidebarStore.announcement)
 
 const editingAnnouncement = ref(false)
 const announcementForm = ref({
@@ -253,39 +233,16 @@ const announcementForm = ref({
 })
 const saving = ref(false)
 
-const siteInfo = ref({
-  visitorCount: 0,
-  viewCount: 0,
-  lastUpdate: '2024-01-01'
-})
-
-const lastUpdateText = computed(() => formatRelativeTime(siteInfo.value.lastUpdate))
+const siteInfo = computed(() => sidebarStore.siteInfo)
+const lastUpdateText = computed(() => sidebarStore.lastUpdateText)
+const stats = computed(() => sidebarStore.stats)
 
 onMounted(async () => {
-  try {
-    const [catResult, tagResult, articleResult] = await Promise.all([
-      listCategories(),
-      listTags(),
-      articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
-    ])
+  await sidebarStore.loadAllData()
 
-    if (catResult.code === 0 && catResult.data) {
-      // 兼容新旧格式：string[] 或 CategoryDTO[]
-      const catData = catResult.data as any
-      categories.value = typeof catData[0] === 'string' 
-        ? catData.map((name: string) => ({ id: name, name, articleCount: 0, createdAt: '' }))
-        : catData
-      stats.value.categories = categories.value.length
-    }
-    if (tagResult.code === 0 && tagResult.data) {
-      // 兼容新旧格式：string[] 或 TagDTO[]
-      const tagData = tagResult.data as any
-      tags.value = typeof tagData[0] === 'string'
-        ? tagData.map((name: string) => ({ id: name, name, articleCount: 0, createdAt: '' }))
-        : tagData
-      stats.value.tags = tags.value.length
-    }
-    stats.value.articles = articleResult.total
+  try {
+    const articleResult = await articleStore.fetchArticles({ page: 1, size: 100, status: 'PUBLISHED' })
+    sidebarStore.updateStatsArticleCount(articleResult.total)
     latestArticles.value = articleResult.articles.slice(0, 4)
 
     const yearMap: Record<string, number> = {}
@@ -296,44 +253,12 @@ onMounted(async () => {
     archiveYears.value = Object.entries(yearMap)
       .map(([year, count]) => ({ year, count }))
       .sort((a, b) => b.year.localeCompare(a.year))
-
   } catch (e) {
-    console.error('Failed to load sidebar data:', e)
+    console.error('Failed to load articles:', e)
   }
 
-  if (!isBlogger.value) {
-    try {
-      const result = await getUserProfile(BLOGGER_ID)
-      if (result.code === 0 && result.data) {
-        bloggerProfile.value = result.data
-      }
-    } catch { /* use placeholder */ }
-  }
-
-  try {
-    const result = await getAnnouncement(BLOGGER_ID)
-    if (result.code === 0 && result.data) {
-      announcement.value = result.data
-    }
-  } catch { /* use default */ }
-
-  try {
-    const result = await getSiteStats()
-    if (result.code === 0 && result.data) {
-      siteInfo.value.visitorCount = result.data.visitorCount
-      siteInfo.value.viewCount = result.data.viewCount
-      if (result.data.lastUpdate) {
-        siteInfo.value.lastUpdate = result.data.lastUpdate
-      }
-    }
-  } catch { /* use default */ }
-
-  try {
-    const result = await getLatestArticleTime()
-    if (result.code === 0 && result.data && result.data.latestTime) {
-      siteInfo.value.lastUpdate = result.data.latestTime
-    }
-  } catch { /* use default */ }
+  categories.value = sidebarStore.categories
+  tags.value = sidebarStore.tags
 })
 
 onUnmounted(() => {
@@ -348,33 +273,6 @@ function formatDate(dateString?: string) {
     month: 'short',
     day: 'numeric'
   })
-}
-
-function formatRelativeTime(dateString?: string): string {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSeconds = Math.floor(diffMs / 1000)
-  const diffMinutes = Math.floor(diffSeconds / 60)
-  const diffHours = Math.floor(diffMinutes / 60)
-  const diffDays = Math.floor(diffHours / 24)
-  const diffMonths = Math.floor(diffDays / 30)
-  const diffYears = Math.floor(diffDays / 365)
-
-  if (diffSeconds < 60) {
-    return '刚刚发布'
-  } else if (diffMinutes < 60) {
-    return `${diffMinutes}分钟前`
-  } else if (diffHours < 24) {
-    return `${diffHours}小时前`
-  } else if (diffDays < 30) {
-    return `${diffDays}天前`
-  } else if (diffMonths < 12) {
-    return `${diffMonths}个月前`
-  } else {
-    return `${diffYears}年前`
-  }
 }
 
 function startEditAnnouncement() {
@@ -392,9 +290,10 @@ function cancelEditAnnouncement() {
 async function saveAnnouncement() {
   saving.value = true
   try {
-    const result = await updateAnnouncement(BLOGGER_ID, announcementForm.value)
+    const userId = authStore.user?.id || BLOGGER_ID
+    const result = await updateAnnouncement(userId, announcementForm.value)
     if (result.code === 0 && result.data) {
-      announcement.value = result.data
+      await sidebarStore.loadAnnouncement()
       editingAnnouncement.value = false
     } else {
       console.error('Failed to save announcement:', result.message)

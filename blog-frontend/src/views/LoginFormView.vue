@@ -20,7 +20,8 @@ const loginForm = ref<LoginDTO>({
 const registerForm = ref<RegisterDTO>({
   username: '',
   email: '',
-  password: ''
+  password: '',
+  code: ''
 })
 
 async function handleSubmit() {

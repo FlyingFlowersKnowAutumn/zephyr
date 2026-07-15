@@ -10,7 +10,7 @@ import org.springframework.web.client.RestTemplate;
 public class UserClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private static final String USER_SERVICE_URL = "http://localhost:8002/api/v1/users";
+    private static final String USER_SERVICE_URL = "http://user-service:8002/api/v1/users";
 
     public UserProfileResponse getUserProfile(String userId) {
         try {

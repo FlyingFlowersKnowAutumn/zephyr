@@ -26,7 +26,6 @@ export function generateTocFromMarkdown(markdown: string): TocItem[] {
   // \u79fb\u9664\u4ee3\u7801\u5757\uff0c\u907f\u514d\u4ee3\u7801\u4e2d\u7684 # \u88ab\u8bef\u8bc6\u522b\u4e3a\u6807\u9898
   const cleanMarkdown = markdown.replace(/```[\s\S]*?```/g, '')
   const headingRegex = /^\s*(#{1,3})\s+(.+?)\s*$/gm
-  const lines = cleanMarkdown.split('\n')
 
   let match
   while ((match = headingRegex.exec(cleanMarkdown)) !== null) {
@@ -58,7 +57,7 @@ export function generateTocFromHtml(html: string): TocItem[] {
     const text = match[3].trim()
     
     if (id && text) {
-      toc.push({ id, text, level })
+      toc.push({ id, text, level, lineNumber: 0 })
     }
   }
   

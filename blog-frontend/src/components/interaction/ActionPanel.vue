@@ -16,7 +16,7 @@ const props = defineProps<{
 }>()
 
 const authStore = useAuthStore()
-const currentUserId = ref(authStore.user?.userId || '')
+const currentUserId = ref(authStore.user?.id || '')
 
 const comments = ref<CommentDTO[]>([])
 const commentPage = ref(0)
@@ -35,9 +35,7 @@ const commentCount = ref(0)
 const favorited = ref(false)
 const favoriteCount = ref(0)
 
-const loadedReplies = ref<Record<string, CommentDTO[]>>({})
 const replyVisible = ref<Record<string, number>>({})
-const loadingReplies = ref<Record<string, boolean>>({})
 
 const replyingTo = ref<{ commentId: string; parentId: string; parentUserName?: string } | null>(null)
 const replyText = ref('')
@@ -66,7 +64,6 @@ watch(() => props.articleId, async (newId) => {
   hasMoreComments.value = false
   commentCount.value = 0
   replyVisible.value = {}
-  loadedReplies.value = {}
   loadingMore.value = false
   replyingTo.value = null
   replyText.value = ''
@@ -143,7 +140,7 @@ async function loadMoreComments() {
     if (result.code === 0 && result.data) {
       comments.value.push(...result.data.content)
       commentPage.value = nextPage
-      hasMoreComments.value = result.data.number + 1 < result.data.totalPages
+      hasMoreComments.value = nextPage < result.data.totalPages
     }
   } catch {
     // silent
@@ -209,7 +206,6 @@ async function handleDeleteComment(id: string) {
         })
       }
       comments.value = removeComment(comments.value)
-      delete loadedReplies.value[id]
       ElMessage.success('评论已删除')
     } else {
       ElMessage.error(result.message || '删除失败')
@@ -247,22 +243,6 @@ async function toggleFavorite() {
 
 // ========== 回复相关 ==========
 
-async function loadReplies(commentId: string) {
-  if (loadedReplies.value[commentId]) return
-  loadingReplies.value[commentId] = true
-  try {
-    const result = await commentApi.getReplies(commentId)
-    if (result.code === 0 && result.data) {
-      loadedReplies.value[commentId] = result.data
-      replyVisible.value[commentId] = Math.min(5, result.data.length)
-    }
-  } catch {
-    // silent
-  } finally {
-    loadingReplies.value[commentId] = false
-  }
-}
-
 function toggleReplies(commentId: string) {
   const comment = comments.value.find(c => c.id === commentId)
   if (!comment?.replies) return
@@ -276,12 +256,6 @@ function toggleReplies(commentId: string) {
   } else {
     replyVisible.value[commentId] = 0
   }
-}
-
-function showMoreReplies(commentId: string) {
-  const comment = comments.value.find(c => c.id === commentId)
-  if (!comment?.replies) return
-  replyVisible.value[commentId] = getAllReplies(comment.replies).length
 }
 
 function collapseReplies(commentId: string) {
@@ -406,13 +380,6 @@ async function submitReply() {
   } finally {
     submittingReply.value = false
   }
-}
-
-function getReplyDisplayName(reply: CommentDTO, allReplies: CommentDTO[]): string {
-  if (!reply.parentId) return reply.userName || '匿名'
-  const parent = allReplies.find((r) => r.id === reply.parentId)
-  if (!parent || parent.id === reply.parentId) return reply.userName || '匿名'
-  return `${reply.userName || '匿名'} → ${parent.userName || '匿名'}`
 }
 
 function downloadMarkdown() {
@@ -543,7 +510,7 @@ function formatTime(dateStr: string): string {
             <!-- 回复区域 -->
             <div v-if="replyVisible[comment.id] && replyVisible[comment.id] > 0 && comment.replies?.length" class="replies-section">
               <div
-                v-for="(reply, ri) in getAllReplies(comment.replies).slice(0, replyVisible[comment.id])"
+                v-for="(reply, _) in getAllReplies(comment.replies).slice(0, replyVisible[comment.id])"
                 :key="reply.id"
                 class="reply-item"
                 :class="{ nested: reply.level > 1 }"

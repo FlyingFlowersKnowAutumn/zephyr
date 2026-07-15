@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { ArticleDTO, CreateArticleDTO, UpdateArticleDTO, CategoryDTO, TagDTO, Result } from '@/types'
+import type { ArticleDTO, CreateArticleDTO, UpdateArticleDTO, CategoryDTO, TagDTO } from '@/types'
 import * as articleApi from '@/api/article'
+import { useSidebarStore } from '@/stores/sidebar'
 
 export const useArticleStore = defineStore('article', () => {
   const articles = ref<ArticleDTO[]>([])
@@ -166,6 +167,8 @@ export const useArticleStore = defineStore('article', () => {
       const result = await articleApi.createCategory(name, description)
       if (result.code === 0) {
         await fetchCategories()
+        const sidebarStore = useSidebarStore()
+        await sidebarStore.refreshCategoriesAndTags()
         return true
       }
       error.value = result.message || '创建分类失败'
@@ -181,6 +184,8 @@ export const useArticleStore = defineStore('article', () => {
       const result = await articleApi.createTag(name)
       if (result.code === 0) {
         await fetchTags()
+        const sidebarStore = useSidebarStore()
+        await sidebarStore.refreshCategoriesAndTags()
         return true
       }
       error.value = result.message || '创建标签失败'
@@ -226,6 +231,8 @@ export const useArticleStore = defineStore('article', () => {
       const result = await articleApi.deleteCategory(id)
       if (result.code === 0) {
         await fetchCategories()
+        const sidebarStore = useSidebarStore()
+        await sidebarStore.refreshCategoriesAndTags()
         return true
       }
       error.value = result.message || '删除分类失败'
@@ -241,6 +248,8 @@ export const useArticleStore = defineStore('article', () => {
       const result = await articleApi.deleteTag(id)
       if (result.code === 0) {
         await fetchTags()
+        const sidebarStore = useSidebarStore()
+        await sidebarStore.refreshCategoriesAndTags()
         return true
       }
       error.value = result.message || '删除标签失败'

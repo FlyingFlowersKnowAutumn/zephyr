@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
+import { useSidebarStore } from '@/stores/sidebar'
 import { renderMarkdown } from '@/utils/markdown'
 import { uploadImage } from '@/api/upload'
 import type { CreateArticleDTO, UpdateArticleDTO } from '@/types'
@@ -10,6 +11,7 @@ import Header from '@/components/layout/Header.vue'
 
 const route = useRoute()
 const articleStore = useArticleStore()
+const sidebarStore = useSidebarStore()
 
 const isEdit = computed(() => !!route.params.slug)
 const articleId = ref<string | null>(null)
@@ -22,7 +24,6 @@ const excerpt = ref('')
 const coverImage = ref('')
 const status = ref<'DRAFT' | 'PUBLISHED'>('DRAFT')
 const selectedCategory = ref('')
-const tagInput = ref('')
 const selectedTags = ref<string[]>([])
 const selectedTagIds = ref<string[]>([])
 const showCategoryModal = ref(false)
@@ -33,20 +34,6 @@ const newTagName = ref('')
 const isSubmitting = ref(false)
 const previewMode = ref(false)
 const previewHtml = computed(() => renderMarkdown(content.value))
-
-function resetForm() {
-  title.value = ''
-  content.value = ''
-  excerpt.value = ''
-  coverImage.value = ''
-  status.value = 'DRAFT'
-  selectedCategory.value = ''
-  selectedTags.value = []
-  tagInput.value = ''
-  outline.value = []
-
-}
-
 
 const outline = ref<{ level: number; text: string; lineIndex: number }[]>([])
 const activeOutlineIndex = ref(-1)
@@ -309,16 +296,8 @@ async function loadArticle() {
     excerpt.value = article.excerpt || ''
     coverImage.value = article.coverImage || ''
     status.value = article.status as 'DRAFT' | 'PUBLISHED'
-    selectedCategory.value = article.categoryName || ''
+    selectedCategory.value = article.categoryId || ''
     selectedTags.value = article.tags || []
-  }
-}
-
-function addTag() {
-  const tag = tagInput.value.trim()
-  if (tag && !selectedTags.value.includes(tag)) {
-    selectedTags.value.push(tag)
-    tagInput.value = ''
   }
 }
 
@@ -405,6 +384,9 @@ async function handleSubmit(isDraft = false) {
 
     if (result) {
       ElMessage.success(isDraft ? '草稿已保存' : '文章已发布')
+      if (!isDraft) {
+        await sidebarStore.refreshLastUpdateTime()
+      }
     } else {
       ElMessage.error(articleStore.error || `${actionLabel}失败`)
     }

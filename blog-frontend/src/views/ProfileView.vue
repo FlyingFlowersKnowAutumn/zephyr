@@ -56,9 +56,6 @@ const targetUserId = computed(() => {
   const id = route.params.userId as string
   return id || authStore.user?.id || ''
 })
-const isOwner = computed(() => {
-  return targetUserId.value === authStore.user?.id
-})
 
 function initMeteors() {
   const meteors = document.querySelectorAll('.meteor')

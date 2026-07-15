@@ -1,5 +1,5 @@
 import axios from './index'
-import type { LoginDTO, RegisterDTO, UserDTO, LoginResponseDTO, UpdatePasswordDTO, SendCodeDTO, RefreshTokenDTO, GuestLoginDTO } from '@/types'
+import type { LoginDTO, RegisterDTO, UserDTO, LoginResponseDTO, UpdatePasswordDTO, SendCodeDTO, RefreshTokenDTO, GuestLoginDTO, Result } from '@/types'
 
 export async function login(dto: LoginDTO): Promise<Result<LoginResponseDTO>> {
   const response = await axios.post('/v1/auth/login', dto)
