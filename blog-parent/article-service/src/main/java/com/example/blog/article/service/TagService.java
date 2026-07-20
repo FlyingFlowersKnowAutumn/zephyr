@@ -18,6 +18,7 @@ public class TagService {
 
     private final TagRepository tagRepository;
     private final ArticleTagMapRepository articleTagMapRepository;
+    private final TagVisitService tagVisitService;
 
     @Transactional
     public Tag createTag(String name) {
@@ -38,6 +39,11 @@ public class TagService {
     @Transactional(readOnly = true)
     public List<Tag> getAllTags() {
         return tagRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Tag> getHotTags() {
+        return tagRepository.findAllOrderByVisitCountDesc();
     }
 
     @Transactional(readOnly = true)
@@ -93,6 +99,37 @@ public class TagService {
     public void decrementArticleCount(String tagId) {
         if (tagId != null && !tagId.isBlank()) {
             tagRepository.decrementArticleCount(tagId);
+        }
+    }
+
+    @Transactional
+    public void incrementVisitCount(String tagId) {
+        incrementVisitCount(tagId, null);
+    }
+
+    @Transactional
+    public void incrementVisitCount(String tagId, String userId) {
+        if (tagId == null || tagId.isBlank()) {
+            return;
+        }
+
+        try {
+            boolean recorded = tagVisitService.recordVisit(tagId, userId != null ? userId : "anonymous");
+            if (recorded) {
+                tagRepository.incrementVisitCount(tagId);
+                log.info("Tag visit count incremented: id={}, userId={}", tagId, userId);
+            }
+        } catch (Exception e) {
+            log.warn("Redis visit recording failed, falling back to direct DB increment: tagId={}", tagId, e);
+            tagRepository.incrementVisitCount(tagId);
+        }
+    }
+
+    @Transactional
+    public void incrementVisitCountByDelta(String tagId, int delta) {
+        if (tagId != null && !tagId.isBlank() && delta > 0) {
+            tagRepository.incrementVisitCountByDelta(tagId, delta);
+            log.info("Tag visit count incremented by delta: id={}, delta={}", tagId, delta);
         }
     }
 }

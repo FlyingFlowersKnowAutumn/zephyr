@@ -20,4 +20,13 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
 
     @Query("SELECT COUNT(c) FROM Comment c WHERE c.articleId = :articleId AND c.deletedAt IS NULL")
     long countByArticleIdAndDeletedAtIsNull(@Param("articleId") UUID articleId);
+
+    @Query("SELECT c FROM Comment c WHERE c.userId = :userId AND c.deletedAt IS NULL ORDER BY c.createdAt DESC")
+    Page<Comment> findByUserId(@Param("userId") UUID userId, Pageable pageable);
+
+    @Query("SELECT c FROM Comment c WHERE c.userId = :userId AND c.deletedAt IS NULL ORDER BY c.createdAt DESC")
+    List<Comment> findByUserIdAll(@Param("userId") UUID userId);
+
+    @Query("SELECT c FROM Comment c WHERE c.deletedAt IS NULL ORDER BY c.createdAt DESC")
+    Page<Comment> findAllNotDeleted(Pageable pageable);
 }

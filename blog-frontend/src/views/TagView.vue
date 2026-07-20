@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import LayoutWrapper from '@/components/layout/LayoutWrapper.vue'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import { useRoute, RouterLink } from 'vue-router'
+import { incrementTagVisit } from '@/api/article'
 import type { TagDTO } from '@/types'
 
 const route = useRoute()
@@ -64,13 +65,26 @@ async function deleteTag(id: string) {
   }
 }
 
+async function selectTag(tag: TagDTO) {
+  if (selectedTag.value === tag.name) {
+    selectedTag.value = ''
+    return
+  }
+  selectedTag.value = tag.name
+  try {
+    await incrementTagVisit(tag.id)
+  } catch (error) {
+    console.error('Failed to increment tag visit:', error)
+  }
+}
+
 const filteredArticles = computed(() => {
   if (!selectedTag.value) return []
   return articles.value.filter(article => article.tags?.includes(selectedTag.value))
 })
 
 const sortedTags = computed(() => {
-  return [...tags.value].sort((a, b) => (b.articleCount || 0) - (a.articleCount || 0))
+  return [...tags.value].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0))
 })
 
 const tagLengthRange = computed(() => {
@@ -93,13 +107,21 @@ onMounted(async () => {
     // 兼容新旧格式
     const tagData = tagResult as any
     tags.value = typeof tagData[0] === 'string'
-      ? tagData.map((name: string) => ({ id: name, name, articleCount: 0, createdAt: '' }))
+      ? tagData.map((name: string) => ({ id: name, name, articleCount: 0, visitCount: 0, createdAt: '' }))
       : tagData
     articles.value = articleResult.articles
   
     const tagFromUrl = route.query.tag as string
-    if (tagFromUrl && tags.value.some(t => t.name === tagFromUrl)) {
-      selectedTag.value = tagFromUrl
+    if (tagFromUrl) {
+      const matchedTag = tags.value.find(t => t.name === tagFromUrl)
+      if (matchedTag) {
+        selectedTag.value = tagFromUrl
+        try {
+          await incrementTagVisit(matchedTag.id)
+        } catch (error) {
+          console.error('Failed to increment tag visit:', error)
+        }
+      }
     }
   } catch (e) {
     console.error('Failed to load tags:', e)
@@ -141,7 +163,7 @@ onMounted(async () => {
               :class="{ 'tag-cloud-hover': hoveredTag !== '' && hoveredTag !== tag.name }"
             >
               <button
-                @click="selectedTag = selectedTag === tag.name ? '' : tag.name"
+                @click="selectTag(tag)"
                 @mouseenter="hoveredTag = tag.name"
                 class="tag"
                 :class="{ active: selectedTag === tag.name }"

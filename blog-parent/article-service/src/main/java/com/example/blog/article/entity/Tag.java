@@ -29,6 +29,14 @@ public class Tag {
     @Builder.Default
     private Integer articleCount = 0;
 
+    @Column(name = "visit_count")
+    @Builder.Default
+    private Integer visitCount = 0;
+
+    public Integer getVisitCount() {
+        return visitCount != null ? visitCount : 0;
+    }
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

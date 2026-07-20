@@ -21,7 +21,7 @@ spring:
         - id: interaction-service
           uri: lb://interaction-service
           predicates:
-            - Path=/api/v1/comments/**,/api/v1/guestbook/**,/api/v1/articles/*/reaction,/api/v1/articles/*/favorite
+            - Path=/api/v1/comments/**,/api/v1/guestbook/**,/api/v1/articles/*/reaction,/api/v1/articles/*/favorite,/api/v1/reactions/**,/api/v1/favorites/**
           filters:
             - StripPrefix=0
             - name: RequestRateLimiter

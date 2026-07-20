@@ -122,12 +122,15 @@ export interface TagDTO {
   id: string
   name: string
   articleCount: number
+  visitCount: number
   createdAt: string
 }
 
 export interface CommentDTO {
   id: string
   articleId: string
+  articleTitle?: string
+  articleSlug?: string
   userId: string
   userName?: string
   avatarUrl?: string
@@ -155,6 +158,14 @@ export interface ReactionResponseDTO {
 export interface FavoriteResponseDTO {
   favorited: boolean
   favoriteCount: number
+}
+
+export interface UserArticleDTO {
+  id: string
+  articleId: string
+  articleTitle?: string
+  articleSlug?: string
+  createdAt: string
 }
 
 export interface UserProfileDTO {

@@ -55,8 +55,13 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
     @Query("UPDATE Article a SET a.commentCount = a.commentCount + 1 WHERE a.id = :id")
     int incrementCommentCount(@Param("id") String id);
     
-    @Query("SELECT a FROM Article a JOIN a.tags t WHERE t = :tag AND a.status = :status ORDER BY a.publishedAt DESC")
-    Page<Article> findByTagAndStatus(@Param("tag") String tag, @Param("status") ArticleStatus status, Pageable pageable);
+    @Query(value = "SELECT a.* FROM articles a JOIN article_tags t ON CAST(a.id AS VARCHAR) = t.article_id WHERE t.tag = :tag AND a.status = :status ORDER BY a.published_at DESC",
+           countQuery = "SELECT COUNT(DISTINCT a.id) FROM articles a JOIN article_tags t ON CAST(a.id AS VARCHAR) = t.article_id WHERE t.tag = :tag AND a.status = :status",
+           nativeQuery = true)
+    Page<Article> findByTagAndStatus(@Param("tag") String tag, @Param("status") String status, Pageable pageable);
+
+    @Query("SELECT a FROM Article a WHERE LOWER(a.categoryName) = LOWER(:categoryName) AND a.status = :status ORDER BY a.publishedAt DESC")
+    Page<Article> findByCategoryNameAndStatus(@Param("categoryName") String categoryName, @Param("status") ArticleStatus status, Pageable pageable);
     
     @Query("SELECT DISTINCT t FROM Article a JOIN a.tags t ORDER BY t")
     List<String> findAllTags();

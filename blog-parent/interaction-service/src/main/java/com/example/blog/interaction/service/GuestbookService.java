@@ -64,6 +64,14 @@ public class GuestbookService {
         log.info("Guestbook deleted: id={}", id);
     }
 
+    @Transactional(readOnly = true)
+    public Page<GuestbookDTO> getGuestbookByUserId(String userId, int page, int size) {
+        UUID userUuid = UUID.fromString(userId);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Guestbook> guestbookPage = guestbookRepository.findByUserId(userUuid, pageable);
+        return guestbookPage.map(g -> convertToDTO(g, null));
+    }
+
     private GuestbookDTO convertToDTO(Guestbook guestbook, String userName) {
         return GuestbookDTO.builder()
                 .id(guestbook.getId().toString())

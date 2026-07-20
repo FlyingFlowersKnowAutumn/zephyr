@@ -122,6 +122,22 @@ export async function deleteTag(id: string): Promise<Result<void>> {
   return response.data
 }
 
+/**
+ * 增加标签访问计数
+ */
+export async function incrementTagVisit(id: string): Promise<Result<void>> {
+  const response = await axios.post(`/v1/tags/${id}/visit`)
+  return response.data
+}
+
+/**
+ * 获取热门标签
+ */
+export async function getHotTags(): Promise<Result<TagDTO[]>> {
+  const response = await axios.get('/v1/tags/hot')
+  return response.data
+}
+
 export async function getLatestArticleTime(): Promise<Result<{ latestTime: string | null }>> {
   const response = await axios.get('/v1/articles/latest-time')
   return response.data

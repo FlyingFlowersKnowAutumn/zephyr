@@ -3,8 +3,8 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import DOMPurify from 'dompurify'
 import { useRouter } from 'vue-router'
-import { listArticles } from '@/api/article'
-import type { ArticleDTO } from '@/types'
+import { listArticles, getHotTags, incrementTagVisit } from '@/api/article'
+import type { ArticleDTO, TagDTO } from '@/types'
 
 interface Props {
   isOpen: boolean
@@ -27,6 +27,34 @@ const searchResults = ref<SearchResult[]>([])
 const totalArticles = ref(0)
 const isLoading = ref(false)
 const selectedIndex = ref(-1)
+const hotTags = ref<TagDTO[]>([])
+const tagColors: Record<string, string> = {}
+
+const colorPalette = [
+  '#00D4FF', '#9B59B6', '#2ECC71', '#F39C12', '#E74C3C',
+  '#3498DB', '#1ABC9C', '#E67E22', '#95A5A6', '#16A085',
+  '#D35400', '#C0392B', '#8E44AD', '#27AE60', '#F1C40F'
+]
+
+function getTagColor(tagName: string): string {
+  if (!tagColors[tagName]) {
+    const index = tagName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colorPalette.length
+    tagColors[tagName] = colorPalette[index]
+  }
+  return tagColors[tagName]
+}
+
+async function loadHotTags() {
+  try {
+    const result = await getHotTags()
+    if (result.code === 0 && result.data) {
+      hotTags.value = (result.data as TagDTO[]).slice(0, 8)
+    }
+  } catch (error) {
+    console.error('Failed to load hot tags:', error)
+    hotTags.value = []
+  }
+}
 
 const debouncedSearch = useDebounceFn(async (keyword: string) => {
   if (!keyword.trim()) {
@@ -71,6 +99,7 @@ watch(() => props.isOpen, (isOpen) => {
     searchQuery.value = ''
     searchResults.value = []
     document.body.style.overflow = 'hidden'
+    loadHotTags()
   } else {
     document.body.style.overflow = ''
   }
@@ -165,8 +194,13 @@ function getSearchSummary(article: ArticleDTO, keyword: string): string {
   return highlightKeyword(excerpt, keyword)
 }
 
-function handleHotSearch(keyword: string) {
-  searchQuery.value = keyword
+async function handleHotSearch(tag: TagDTO) {
+  searchQuery.value = tag.name
+  try {
+    await incrementTagVisit(tag.id)
+  } catch (error) {
+    console.error('Failed to increment tag visit:', error)
+  }
 }
 
 
@@ -243,13 +277,18 @@ onUnmounted(() => {
 
             <div v-else class="search-tips">
               <div class="hot-section">
-                <span class="hot-label">热门搜索</span>
+                <span class="hot-label">热门标签</span>
                 <div class="hot-tags">
-                  <span class="hot-tag cyan" @click="handleHotSearch('Vue3')">Vue3</span>
-                  <span class="hot-tag purple" @click="handleHotSearch('TypeScript')">TypeScript</span>
-                  <span class="hot-tag green" @click="handleHotSearch('Node.js')">Node.js</span>
-                  <span class="hot-tag orange" @click="handleHotSearch('Java')">Java</span>
-                  <span class="hot-tag pink" @click="handleHotSearch('Spring Boot')">Spring Boot</span>
+                  <span
+                    v-for="tag in hotTags"
+                    :key="tag.id"
+                    class="hot-tag"
+                    :style="{ 
+                      background: `${getTagColor(tag.name)}20`,
+                      '--tag-color': getTagColor(tag.name)
+                    }"
+                    @click="handleHotSearch(tag)"
+                  >{{ tag.name }}</span>
                 </div>
               </div>
             </div>
@@ -544,54 +583,10 @@ onUnmounted(() => {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--color-text-secondary, #999);
 
-  &.cyan {
-    background: rgba(0, 212, 255, 0.08);
-
-    &:hover {
-      background: rgba(0, 212, 255, 0.25);
-      color: #000000;
-      transform: translateY(-2px);
-    }
-  }
-
-  &.purple {
-    background: rgba(155, 89, 182, 0.08);
-
-    &:hover {
-      background: rgba(155, 89, 182, 0.25);
-      color: #000000;
-      transform: translateY(-2px);
-    }
-  }
-
-  &.green {
-    background: rgba(46, 204, 113, 0.08);
-
-    &:hover {
-      background: rgba(46, 204, 113, 0.25);
-      color: #000000;
-      transform: translateY(-2px);
-    }
-  }
-
-  &.orange {
-    background: rgba(243, 156, 18, 0.08);
-
-    &:hover {
-      background: rgba(243, 156, 18, 0.25);
-      color: #000000;
-      transform: translateY(-2px);
-    }
-  }
-
-  &.pink {
-    background: rgba(231, 76, 60, 0.08);
-
-    &:hover {
-      background: rgba(231, 76, 60, 0.25);
-      color: #000000;
-      transform: translateY(-2px);
-    }
+  &:hover {
+    background: var(--tag-color, rgba(0, 212, 255, 0.15)) !important;
+    color: #000000;
+    transform: translateY(-2px);
   }
 }
 

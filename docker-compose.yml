@@ -144,19 +144,6 @@ services:
     command: tunnel --url http://host.docker.internal:80
     restart: always
 
-  # frpc:
-  #   image: docker.m.daocloud.io/snowdreamtech/frpc:latest
-  #   container_name: blog-frpc
-  #   volumes:
-  #     - ./frpc.ini:/etc/frp/frpc.ini
-  #   entrypoint: ["frpc"]
-  #   command: ["-c", "/etc/frp/frpc.ini"]
-  #   depends_on:
-  #     - nginx
-  #   network_mode: host
-  #   dns:
-  #     - 223.5.5.5
-  #     - 223.6.6.6
 
 networks:
   blog-network:

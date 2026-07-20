@@ -23,6 +23,11 @@ public class TagController {
         return Result.success(tagService.getAllTags());
     }
 
+    @GetMapping("/hot")
+    public Result<List<Tag>> getHotTags() {
+        return Result.success(tagService.getHotTags());
+    }
+
     @GetMapping("/{id}")
     public Result<Tag> getTagById(@PathVariable String id) {
         return Result.success(tagService.getTagById(id));
@@ -43,6 +48,14 @@ public class TagController {
     @DeleteMapping("/{id}")
     public Result<Void> deleteTag(@PathVariable String id) {
         tagService.deleteTag(id);
+        return Result.success(null);
+    }
+
+    @PostMapping("/{id}/visit")
+    public Result<Void> incrementVisit(
+            @PathVariable String id,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        tagService.incrementVisitCount(id, userId);
         return Result.success(null);
     }
 }

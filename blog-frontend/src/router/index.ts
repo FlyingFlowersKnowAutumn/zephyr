@@ -20,11 +20,7 @@ const router = createRouter({
       name: 'Register',
       component: () => import('@/views/RegisterView.vue')
     },
-    {
-      path: '/login-form',
-      name: 'LoginForm',
-      component: () => import('@/views/LoginFormView.vue')
-    },
+
     {
       path: '/',
       name: 'Home',
@@ -117,7 +113,7 @@ router.beforeEach((to, _from, next) => {
     return
   }
   
-  if ((to.path === '/login' || to.path === '/login-form') && authStore.isLoggedIn) {
+  if (to.path === '/login' && authStore.isLoggedIn) {
     next('/')
     return
   }
@@ -125,13 +121,8 @@ router.beforeEach((to, _from, next) => {
   next()
 })
 
-router.afterEach((to, from) => {
-  console.log('路由变化:', from.path, '->', to.path)
-  incrementViewCount()
-    .then(() => console.log('浏览量+1成功'))
-    .catch((err) => {
-      console.error('浏览量+1失败:', err)
-    })
+router.afterEach(() => {
+  incrementViewCount().catch(() => {})
 })
 
 export default router

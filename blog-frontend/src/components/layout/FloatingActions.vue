@@ -146,7 +146,6 @@ onUnmounted(() => {
   transition: transform 0.4s ease;
 }
 
-/* 太阳光芒旋转 */
 .sun .rays {
   transform-origin: center;
   transition: transform 0.6s ease;
@@ -156,7 +155,6 @@ onUnmounted(() => {
   transform: rotate(90deg);
 }
 
-/* 月亮 hover 轻摆 */
 .moon {
   transition: transform 0.4s ease;
 }

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getUserProfile, updateUserProfile } from '@/api/profile'
-import type { UserProfileDTO } from '@/types'
+import { getGuestbookByUserId, deleteGuestbook, getGuestbookList } from '@/api/guestbook'
+import { getCommentsByUserId, getAllComments, deleteComment } from '@/api/comment'
+import { getUserReactions } from '@/api/reaction'
+import { getUserFavorites } from '@/api/favorite'
+import type { UserProfileDTO, GuestbookDTO, CommentDTO, UserArticleDTO } from '@/types'
 import SeoHead from '@/components/seo/SeoHead.vue'
 import Header from '@/components/layout/Header.vue'
 import gsap from 'gsap'
@@ -46,6 +50,20 @@ const form = ref({
   avatarUrl: ''
 })
 const MAX_BIO_LENGTH = 500
+
+const guestbooks = ref<GuestbookDTO[]>([])
+const comments = ref<CommentDTO[]>([])
+const guestbookLoading = ref(false)
+const commentsLoading = ref(false)
+const guestbookTotal = ref(0)
+const commentsTotal = ref(0)
+
+const likedArticles = ref<UserArticleDTO[]>([])
+const favoritedArticles = ref<UserArticleDTO[]>([])
+const likedLoading = ref(false)
+const favoritedLoading = ref(false)
+const likedTotal = ref(0)
+const favoritedTotal = ref(0)
 
 const avatarModalVisible = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -263,6 +281,140 @@ async function uploadAvatar() {
 
 function switchTab(tab: string) {
   activeTab.value = tab
+  if (tab === 'comments') {
+    loadGuestbooks()
+    loadComments()
+  } else if (tab === 'favorites') {
+    loadLikedArticles()
+    loadFavoritedArticles()
+  }
+}
+
+async function loadGuestbooks() {
+  guestbookLoading.value = true
+  try {
+    const userId = targetUserId.value
+    const isBlogger = authStore.user?.role === 'blogger' || authStore.user?.role === 'admin'
+    
+    if (isBlogger) {
+      const result = await getGuestbookList({ page: 0, size: 50 })
+      if (result.code === 0 && result.data) {
+        guestbooks.value = result.data.content
+        guestbookTotal.value = result.data.totalElements
+      }
+    } else {
+      const result = await getGuestbookByUserId(userId, 0, 50)
+      if (result.code === 0 && result.data) {
+        guestbooks.value = result.data.content
+        guestbookTotal.value = result.data.totalElements
+      }
+    }
+  } catch {
+    guestbooks.value = []
+  } finally {
+    guestbookLoading.value = false
+  }
+}
+
+async function loadComments() {
+  commentsLoading.value = true
+  try {
+    const userId = targetUserId.value
+    const isBlogger = authStore.user?.role === 'blogger' || authStore.user?.role === 'admin'
+    
+    if (isBlogger) {
+      const result = await getAllComments(0, 50)
+      if (result.code === 0 && result.data) {
+        comments.value = result.data.content
+        commentsTotal.value = result.data.totalElements
+      }
+    } else {
+      const result = await getCommentsByUserId(userId, 0, 50)
+      if (result.code === 0 && result.data) {
+        comments.value = result.data.content
+        commentsTotal.value = result.data.totalElements
+      }
+    }
+  } catch {
+    comments.value = []
+  } finally {
+    commentsLoading.value = false
+  }
+}
+
+async function handleDeleteGuestbook(id: string) {
+  if (!confirm('确定要删除这条留言吗？')) return
+  try {
+    const result = await deleteGuestbook(id)
+    if (result.code === 0) {
+      guestbooks.value = guestbooks.value.filter(g => g.id !== id)
+      guestbookTotal.value--
+      ElMessage.success('删除成功')
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
+
+async function handleDeleteComment(id: string) {
+  if (!confirm('确定要删除这条评论吗？')) return
+  try {
+    const result = await deleteComment(id)
+    if (result.code === 0) {
+      comments.value = comments.value.filter(c => c.id !== id)
+      commentsTotal.value--
+      ElMessage.success('删除成功')
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
+
+function formatDate(dateStr: string) {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+async function loadLikedArticles() {
+  likedLoading.value = true
+  try {
+    const userId = targetUserId.value
+    const result = await getUserReactions(userId)
+    if (result.code === 0 && result.data) {
+      likedArticles.value = result.data
+      likedTotal.value = result.data.length
+    }
+  } catch {
+    likedArticles.value = []
+  } finally {
+    likedLoading.value = false
+  }
+}
+
+async function loadFavoritedArticles() {
+  favoritedLoading.value = true
+  try {
+    const userId = targetUserId.value
+    const result = await getUserFavorites(userId)
+    if (result.code === 0 && result.data) {
+      favoritedArticles.value = result.data
+      favoritedTotal.value = result.data.length
+    }
+  } catch {
+    favoritedArticles.value = []
+  } finally {
+    favoritedLoading.value = false
+  }
 }
 </script>
 
@@ -327,12 +479,87 @@ function switchTab(tab: string) {
       <div class="profile-card">
         <div class="tab-content">
           <div v-if="activeTab === 'comments'" class="tab-pane comments-pane">
-            <div class="info-box">
-              <div class="empty-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                <p>暂无留言与评论</p>
+            <div class="comments-layout">
+              <div class="comments-left">
+                <div class="section-header">
+                  <h3>留言</h3>
+                  <span class="section-count">{{ guestbookTotal }}</span>
+                </div>
+                
+                <div v-if="guestbookLoading" class="section-loading">加载中...</div>
+                
+                <div v-else-if="guestbooks.length === 0" class="section-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <p>暂无留言</p>
+                </div>
+                
+                <div v-else class="guestbook-list">
+                  <div
+                    v-for="guestbook in guestbooks"
+                    :key="guestbook.id"
+                    class="guestbook-item"
+                  >
+                    <div class="guestbook-content">{{ guestbook.content }}</div>
+                    <div class="guestbook-meta">
+                      <span class="guestbook-date">{{ formatDate(guestbook.createdAt) }}</span>
+                      <button class="delete-btn" @click="handleDeleteGuestbook(guestbook.id)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="comments-right">
+                <div class="section-header">
+                  <h3>评论</h3>
+                  <span class="section-count">{{ commentsTotal }}</span>
+                </div>
+                
+                <div v-if="commentsLoading" class="section-loading">加载中...</div>
+                
+                <div v-else-if="comments.length === 0" class="section-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                  </svg>
+                  <p>暂无评论</p>
+                </div>
+                
+                <div v-else class="comment-list">
+                  <div
+                    v-for="comment in comments"
+                    :key="comment.id"
+                    class="comment-item"
+                  >
+                    <RouterLink 
+                      v-if="comment.articleTitle"
+                      :to="`/articles/${comment.articleSlug || comment.articleId}`"
+                      class="article-link"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      {{ comment.articleTitle }}
+                    </RouterLink>
+                    <div class="comment-content">{{ comment.content }}</div>
+                    <div class="comment-meta">
+                      <span class="comment-date">{{ formatDate(comment.createdAt) }}</span>
+                      <button class="delete-btn" @click="handleDeleteComment(comment.id)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -377,7 +604,7 @@ function switchTab(tab: string) {
                     <label class="radio-item">
                       <input type="radio" v-model="form.gender" value="secret" />
                       <span class="radio-dot"></span>
-                      <span>薛定谔的猫</span>
+                      <span>量子叠加态</span>
                     </label>
                     <label class="radio-item">
                       <input type="radio" v-model="form.gender" value="male" />
@@ -415,12 +642,77 @@ function switchTab(tab: string) {
           </div>
 
           <div v-if="activeTab === 'favorites'" class="tab-pane favorites-pane">
-            <div class="info-box">
-              <div class="empty-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-                <p>暂无点赞与收藏</p>
+            <div class="favorites-layout">
+              <div class="favorites-left">
+                <div class="section-header">
+                  <h3>点赞</h3>
+                  <span class="section-count">{{ likedTotal }}</span>
+                </div>
+                
+                <div v-if="likedLoading" class="section-loading">加载中...</div>
+                
+                <div v-else-if="likedArticles.length === 0" class="section-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                  </svg>
+                  <p>暂无点赞文章</p>
+                </div>
+                
+                <div v-else class="article-list">
+                  <RouterLink
+                    v-for="article in likedArticles"
+                    :key="article.id"
+                    :to="`/articles/${article.articleSlug || article.articleId}`"
+                    class="article-card"
+                  >
+                    <div class="article-card-content">
+                      <h4 class="article-card-title">{{ article.articleTitle || '未命名文章' }}</h4>
+                      <p class="article-card-date">{{ formatDate(article.createdAt) }}</p>
+                    </div>
+                    <div class="article-card-arrow">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                      </svg>
+                    </div>
+                  </RouterLink>
+                </div>
+              </div>
+              
+              <div class="divider-line"></div>
+              
+              <div class="favorites-right">
+                <div class="section-header">
+                  <h3>收藏</h3>
+                  <span class="section-count">{{ favoritedTotal }}</span>
+                </div>
+                
+                <div v-if="favoritedLoading" class="section-loading">加载中...</div>
+                
+                <div v-else-if="favoritedArticles.length === 0" class="section-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                  <p>暂无收藏文章</p>
+                </div>
+                
+                <div v-else class="article-list">
+                  <RouterLink
+                    v-for="article in favoritedArticles"
+                    :key="article.id"
+                    :to="`/articles/${article.articleSlug || article.articleId}`"
+                    class="article-card"
+                  >
+                    <div class="article-card-content">
+                      <h4 class="article-card-title">{{ article.articleTitle || '未命名文章' }}</h4>
+                      <p class="article-card-date">{{ formatDate(article.createdAt) }}</p>
+                    </div>
+                    <div class="article-card-arrow">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                      </svg>
+                    </div>
+                  </RouterLink>
+                </div>
               </div>
             </div>
           </div>
@@ -973,6 +1265,171 @@ function switchTab(tab: string) {
   }
 }
 
+.comments-layout {
+  display: flex;
+  gap: 2rem;
+  height: calc(100vh - 300px);
+
+  .comments-left,
+  .comments-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+
+  .divider-line {
+    width: 1px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.1) 100%);
+    margin: 1rem 0;
+  }
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+
+  h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.85);
+    margin: 0;
+  }
+
+  .section-count {
+    font-size: 0.75rem;
+    color: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+}
+
+.section-loading,
+.section-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.85rem;
+
+  svg {
+    opacity: 0.5;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.guestbook-list,
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.guestbook-item,
+.comment-item {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  position: relative;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.6);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+}
+
+.guestbook-content,
+.comment-content {
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.7);
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+  word-break: break-word;
+}
+
+.guestbook-meta,
+.comment-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.guestbook-date,
+.comment-date {
+  font-size: 0.72rem;
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.delete-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+  }
+}
+
+.article-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: #4a90d9;
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+  padding: 4px 8px;
+  background: rgba(74, 144, 217, 0.08);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(74, 144, 217, 0.15);
+    color: #357abd;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .comments-layout {
+    flex-direction: column;
+    height: auto;
+
+    .divider-line {
+      width: 100%;
+      height: 1px;
+      margin: 1rem 0;
+    }
+
+    .comments-left,
+    .comments-right {
+      overflow-y: visible;
+    }
+  }
+}
+
 .avatar-section {
   text-align: center;
 
@@ -1141,6 +1598,100 @@ function switchTab(tab: string) {
     &:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+  }
+}
+
+.favorites-layout {
+  display: flex;
+  gap: 2rem;
+  height: calc(100vh - 300px);
+
+  .favorites-left,
+  .favorites-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+}
+
+.article-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.article-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.5);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateX(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .article-card-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .article-card-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.8);
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.3s ease;
+  }
+
+  .article-card-date {
+    font-size: 0.72rem;
+    color: rgba(0, 0, 0, 0.35);
+    margin: 0;
+  }
+
+  .article-card-arrow {
+    flex-shrink: 0;
+    margin-left: 1rem;
+    color: rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  &:hover {
+    .article-card-title {
+      color: #4a90d9;
+    }
+
+    .article-card-arrow {
+      color: #4a90d9;
+      transform: translateX(4px);
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .favorites-layout {
+    flex-direction: column;
+    height: auto;
+
+    .favorites-left,
+    .favorites-right {
+      overflow-y: visible;
     }
   }
 }

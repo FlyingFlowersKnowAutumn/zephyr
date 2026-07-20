@@ -44,4 +44,12 @@ public class GuestbookController {
         guestbookService.deleteGuestbook(id, userId, isAdmin);
         return Result.success(null);
     }
+
+    @GetMapping("/user/{userId}")
+    public Result<Page<GuestbookDTO>> getGuestbookByUserId(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return Result.success(guestbookService.getGuestbookByUserId(userId, page, size));
+    }
 }

@@ -75,7 +75,7 @@ function handleSearch() {
     <div class="header-inner">
       <div class="left-section">
         <div class="logo">
-          <RouterLink to="/">Zéphyr・Journal</RouterLink>
+          <RouterLink to="/">Zéphyr</RouterLink>
         </div>
       </div>
       

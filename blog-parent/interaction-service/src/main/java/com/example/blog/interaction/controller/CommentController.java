@@ -63,4 +63,23 @@ public class CommentController {
         commentService.updateStatus(id, dto);
         return Result.success(null);
     }
+
+    @GetMapping("/user/{userId}")
+    public Result<Page<CommentDTO>> getCommentsByUserId(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return Result.success(commentService.getCommentsByUserId(userId, page, size));
+    }
+
+    @GetMapping("/all")
+    public Result<Page<CommentDTO>> getAllComments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        if (!"blogger".equals(role) && !"admin".equals(role)) {
+            return Result.fail(1003, "权限不足");
+        }
+        return Result.success(commentService.getAllComments(page, size));
+    }
 }

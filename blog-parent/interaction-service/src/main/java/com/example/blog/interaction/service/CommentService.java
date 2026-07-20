@@ -4,6 +4,7 @@ import com.example.blog.common.dto.CommentCreateDTO;
 import com.example.blog.common.dto.CommentDTO;
 import com.example.blog.common.dto.CommentStatusUpdateDTO;
 import com.example.blog.common.exception.BusinessException;
+import com.example.blog.interaction.client.ArticleClient;
 import com.example.blog.interaction.client.ArticleStatsClient;
 import com.example.blog.interaction.client.UserClient;
 import com.example.blog.interaction.entity.Comment;
@@ -34,6 +35,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final SensitiveWordFilter sensitiveWordFilter;
     private final ArticleStatsClient articleStatsClient;
+    private final ArticleClient articleClient;
     private final UserClient userClient;
 
     @Transactional
@@ -138,6 +140,43 @@ public class CommentService {
         comment.setStatus(dto.getStatus());
         commentRepository.save(comment);
         log.info("Comment status updated: id={}, status={}", id, dto.getStatus());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CommentDTO> getCommentsByUserId(String userId, int page, int size) {
+        UUID userUuid = UUID.fromString(userId);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Comment> commentPage = commentRepository.findByUserId(userUuid, pageable);
+
+        return commentPage.map(comment -> {
+            CommentDTO dto = convertToDTOWithArticle(comment);
+            return dto;
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CommentDTO> getAllComments(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Comment> commentPage = commentRepository.findAllNotDeleted(pageable);
+
+        return commentPage.map(comment -> {
+            CommentDTO dto = convertToDTOWithArticle(comment);
+            return dto;
+        });
+    }
+
+    private CommentDTO convertToDTOWithArticle(Comment comment) {
+        CommentDTO dto = convertToDTO(comment);
+        try {
+            ArticleClient.ArticleInfo articleInfo = articleClient.getArticleInfo(comment.getArticleId().toString());
+            if (articleInfo != null) {
+                dto.setArticleTitle(articleInfo.getTitle());
+                dto.setArticleSlug(articleInfo.getSlug());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get article info for comment {}: {}", comment.getId(), e.getMessage());
+        }
+        return dto;
     }
 
     private CommentDTO convertToDTO(Comment comment, UUID replyToUserId) {

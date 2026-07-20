@@ -47,6 +47,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/sitemap",
             "/api/v1/guestbook",
             "/api/v1/users",
+            "/api/v1/reactions",
+            "/api/v1/favorites",
             "/uploads"
     );
 

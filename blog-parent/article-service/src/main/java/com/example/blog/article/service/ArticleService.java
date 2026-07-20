@@ -151,7 +151,17 @@ public class ArticleService {
         } else if (categoryId != null) {
             page = articleRepository.findByCategoryIdAndStatus(categoryId, status, pageable);
         } else if (keyword != null && !keyword.isBlank()) {
-            page = articleRepository.searchByTitle(keyword.trim(), status, pageable);
+            String trimmedKeyword = keyword.trim();
+            page = articleRepository.searchByTitle(trimmedKeyword, status, pageable);
+            
+            if (page.isEmpty()) {
+                Pageable unsortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+                page = articleRepository.findByTagAndStatus(trimmedKeyword, status.name(), unsortedPageable);
+                
+                if (page.isEmpty()) {
+                    page = articleRepository.findByCategoryNameAndStatus(trimmedKeyword, status, pageable);
+                }
+            }
         } else {
             page = articleRepository.findByStatus(status, pageable);
         }
@@ -166,7 +176,8 @@ public class ArticleService {
 
     @Transactional(readOnly = true)
     public Page<ArticleDTO> getArticlesByTag(String tag, Pageable pageable) {
-        return articleRepository.findByTagAndStatus(tag, ArticleStatus.PUBLISHED, pageable).map(this::convertToDTO);
+        Pageable unsortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return articleRepository.findByTagAndStatus(tag, ArticleStatus.PUBLISHED.name(), unsortedPageable).map(this::convertToDTO);
     }
 
     @Transactional

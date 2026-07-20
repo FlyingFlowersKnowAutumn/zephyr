@@ -18,3 +18,8 @@ export async function deleteGuestbook(id: string): Promise<Result<void>> {
   const response = await axios.delete(`/v1/guestbook/${id}`)
   return response.data
 }
+
+export async function getGuestbookByUserId(userId: string, page = 0, size = 20): Promise<Result<{ content: GuestbookDTO[]; totalPages: number; totalElements: number }>> {
+  const response = await axios.get(`/v1/guestbook/user/${userId}`, { params: { page, size } })
+  return response.data
+}
