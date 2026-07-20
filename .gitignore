@@ -1,0 +1,56 @@
+# ===== 编译产物 =====
+**/target/
+**/dist/
+**/out/
+*.class
+*.jar
+*.war
+
+# ===== 依赖目录 =====
+node_modules/
+
+# ===== IDE & 编辑器 =====
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ===== 环境 & 本地配置 =====
+.env
+.env.local
+.env.*.local
+application-local.yml
+**/application-local.yml
+
+# ===== 日志 =====
+*.log
+logs/
+
+# ===== Claude 内部文件 =====
+.claude/
+
+# ===== 上传文件 =====
+uploads/
+
+# ===== 开发文档 =====
+开发文档/
+
+# ===== 临时文件 =====
+*.tmp
+*.bak
+*.cache
+
+# ===== 开发文档 =====
+openspec/
+docs/superpowers/
+
+# ===== 未完成的迁移脚本 =====
+V4__add_images_to_comments.sql
+V5__convert_favorites_to_uuid.sql

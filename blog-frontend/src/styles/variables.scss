@@ -1,0 +1,43 @@
+:root {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8f9fa;
+  --color-bg-card: #ffffff;
+  --color-text-primary: #2c3e50;
+  --color-text-secondary: #7f8c8d;
+  --color-accent: #3498db;
+  --color-accent-secondary: #2c3e50;
+  --color-border: #ecf0f1;
+  --color-hover-bg: #f5f7fa;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+
+  --font-family-sans: 'Source Han Sans SC', 'Source Han Sans', 'Noto Sans SC', 'PingFang SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-serif: 'Noto Serif SC', serif;
+
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.12);
+  --transition-default: 0.3s ease;
+  --border-radius: 8px;
+}
+
+html.dark {
+  --color-bg-primary: #0a1628;
+  --color-bg-secondary: #0f1d32;
+  --color-bg-card: #162337;
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-accent: #00d4ff;
+  --color-border: #1e3a5f;
+  --color-hover-bg: #1a2740;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+
+  --font-family-sans: 'Source Han Sans SC', 'Source Han Sans', 'Noto Sans SC', 'PingFang SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --transition-default: 0.3s ease;
+  --border-radius: 8px;
+}

@@ -1,0 +1,3 @@
+CREATE USER nacos WITH PASSWORD 'nacos';
+CREATE DATABASE nacos_db OWNER nacos;
+GRANT ALL PRIVILEGES ON DATABASE nacos_db TO nacos;
