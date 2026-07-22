@@ -299,9 +299,32 @@ kubectl apply -f k8s/
 
 ---
 
-## 📜 许可证
+## 📜 许可证与知识产权声明
 
-本项目采用 MIT 许可证，详见 [LICENSE](LICENSE) 文件。
+### 知识产权
+
+**版权所有 (c) 2024 FlyingFlowersKnowAutumn**
+
+本项目的所有源代码、文档、配置文件及相关资源均受中华人民共和国著作权法及国际版权公约保护。未经授权，禁止商用。
+
+**作者**: FlyingFlowersKnowAutumn（飞花知秋）  
+**邮箱**: 1822134823@qq.com  
+**GitHub**: [FlyingFlowersKnowAutumn](https://github.com/FlyingFlowersKnowAutumn)
+
+---
+
+### 开源许可证
+
+本项目采用 **MIT 许可证** 开源，详见 [LICENSE](LICENSE) 文件。
+
+根据 MIT 许可证，你可以：
+- 自由使用、复制、修改和分发本项目的代码
+- 将本项目的代码用于非商业目的
+- 在修改后的代码中保留原始版权声明
+
+但必须遵守以下条件：
+- 在所有副本或实质性部分中保留上述版权声明和本许可声明
+- 本软件按"原样"提供，不提供任何明示或暗示的担保
 
 ---
 
@@ -319,5 +342,5 @@ kubectl apply -f k8s/
 
 ---
 
-*Made with ❤️ by [https://github.com/FlyingFlowersKnowAutumn/zephyr.git](https://github.com/your-username)*
+*Made with ❤️ by [https://github.com/FlyingFlowersKnowAutumn/zephyr.git]
 
