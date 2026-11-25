@@ -445,8 +445,8 @@ function formatTime(dateStr: string): string {
         </div>
       </div>
 
-      <!-- 评论输入区域 -->
-      <div class="comment-input-area">
+      <!-- 评论输入区域：未登录时引导去登录，避免点了只弹“评论失败” -->
+      <div v-if="authStore.isLoggedIn" class="comment-input-area">
         <textarea
           v-model="commentText"
           class="comment-input"
@@ -475,6 +475,11 @@ function formatTime(dateStr: string): string {
             {{ submittingComment ? '提交中...' : '发布评论' }}
           </button>
         </div>
+      </div>
+
+      <div v-else class="comment-login-tip">
+        <span>登录后即可参与评论</span>
+        <RouterLink class="comment-login-btn" to="/login">去登录</RouterLink>
       </div>
 
       <!-- 评论列表 -->
@@ -781,6 +786,29 @@ function formatTime(dateStr: string): string {
 .comment-input-area {
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--color-border);
+}
+
+.comment-login-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.comment-login-btn {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  color: #fff;
+  background: var(--color-accent);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+
+  &:hover { opacity: 0.85; }
 }
 
 .comment-input {
