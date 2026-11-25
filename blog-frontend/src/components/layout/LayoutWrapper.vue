@@ -423,7 +423,8 @@ function scrollDown() {
 .main-wrapper {
   flex: 1;
   padding: 3rem 14rem;
-  background: var(--color-bg-primary);
+  // 顶部留一层极浅的过渡色，避免大图 hero 与纯白内容区直接硬切
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0, var(--color-bg-primary) 260px);
   position: relative;
   z-index: 1;
 }

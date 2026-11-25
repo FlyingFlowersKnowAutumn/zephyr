@@ -155,7 +155,7 @@ watch(() => route.path, (path) => {
   margin-bottom: 3rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.75rem;
 }
 
 .view-more-section {

@@ -82,16 +82,38 @@ function handleClick() {
 
 <style lang="scss" scoped>
 .article-card {
+  position: relative;
   background: var(--color-bg-card);
-  border-radius: var(--border-radius);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.02);
-  transition: all 0.3s ease;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   cursor: pointer;
 
+  // 左侧强调条，hover 时自上而下展开
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-accent);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 0.3s ease;
+    z-index: 2;
+  }
+
   &:hover {
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
-    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--color-accent-soft);
+    transform: translateY(-4px);
+
+    &::before {
+      transform: scaleY(1);
+    }
   }
 }
 
@@ -129,7 +151,7 @@ function handleClick() {
 
 .card-body {
   flex: 1;
-  padding: 1.5rem 1.75rem;
+  padding: 1.6rem 1.9rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -138,9 +160,9 @@ function handleClick() {
 
 .card-title {
   font-size: 1.35rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-primary);
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.7rem;
   line-height: 1.5;
   transition: color 0.25s ease;
   cursor: pointer;
@@ -174,16 +196,19 @@ function handleClick() {
 .meta-category {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   text-decoration: none;
   transition: all 0.25s ease;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
 
   &:hover {
-    background: rgba(0, 212, 255, 0.08);
+    background: var(--color-accent-soft);
     color: var(--color-accent);
+    border-color: var(--color-accent-soft);
   }
 }
 
