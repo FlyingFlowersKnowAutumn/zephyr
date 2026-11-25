@@ -422,7 +422,11 @@ function scrollDown() {
 
 .main-wrapper {
   flex: 1;
-  padding: 3rem 14rem;
+  padding-block: 3rem;
+  // 左右留白跟随视口收缩：视口 ≥1498px 时稳定为 14rem（宽屏观感不变），
+  // 视口变窄（含浏览器放大）时按 (100% - 1050px) / 2 递减，最低 1rem。
+  // 之前写死 14rem，导致 1025~1498px 区间内容区被吃掉 448px，归档/分类页的文章标题被挤成一字一行。
+  padding-inline: clamp(1rem, calc((100% - 1050px) * 0.5), 14rem);
   // 顶部留一层极浅的过渡色，避免大图 hero 与纯白内容区直接硬切
   background: linear-gradient(180deg, var(--color-bg-secondary) 0, var(--color-bg-primary) 260px);
   position: relative;

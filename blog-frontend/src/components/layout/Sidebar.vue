@@ -307,7 +307,7 @@ async function saveAnnouncement() {
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ 'sidebar--article': isArticlePage }">
     <div class="sidebar-card profile-card">
       <div class="avatar">
         <img v-if="profile.avatar" :src="profile.avatar" alt="avatar" />
@@ -1519,6 +1519,20 @@ async function saveAnnouncement() {
 @media (max-width: 1024px) {
   .sidebar {
     width: 100%;
+  }
+
+  // 非文章页：侧栏被挤到内容区上方后改用多列网格。
+  // 原来这里是 width: 100% 的竖排，卡片被拉成整页宽，
+  // 标签云会摊成一条条参差不齐的色带，下方留大片空白。
+  .sidebar:not(.sidebar--article) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
+  }
+
+  // 文章页保持单列，但限宽，避免目录卡被拉成整页宽后只有几行短文字
+  .sidebar--article {
+    max-width: 560px;
   }
 }
 </style>
