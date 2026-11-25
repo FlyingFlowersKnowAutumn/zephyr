@@ -35,5 +35,17 @@
             <artifactId>jackson-databind</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- 仅 Pageables 用到；消费方（JPA 服务）都自带该依赖，故为 provided -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- 仅 DataIntegrityViolationException 用到；消费方自带，故为 provided -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

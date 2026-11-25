@@ -7,6 +7,7 @@ import com.example.blog.user.service.JwtService;
 import com.example.blog.user.service.UserService;
 import com.example.blog.user.service.VerificationCodeService;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,12 +52,22 @@ public class AuthController {
     }
 
     @PostMapping("/send-code")
-    public Result<Void> sendCode(@Valid @RequestBody SendCodeDTO dto) {
-        boolean success = verificationCodeService.sendCode(dto.getEmail(), dto.getType());
+    public Result<Void> sendCode(@Valid @RequestBody SendCodeDTO dto, HttpServletRequest request) {
+        boolean success = verificationCodeService.sendCode(
+                dto.getEmail(), dto.getType(), resolveClientIp(request));
         if (!success) {
-            throw BusinessException.tooManyRequests("请在倒计时结束后重试");
+            throw BusinessException.tooManyRequests("发送过于频繁或邮件发送失败，请稍后重试");
         }
         return Result.success(null);
+    }
+
+    /** 取真实客户端 IP（nginx 会透传 X-Forwarded-For） */
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @PutMapping("/password")

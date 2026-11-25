@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Test
+        working-directory: blog-parent
+        run: mvn -B test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: blog-frontend/package-lock.json
+      - name: Install
+        working-directory: blog-frontend
+        run: npm ci
+      - name: Type check
+        working-directory: blog-frontend
+        run: npx vue-tsc --noEmit
+      - name: Build
+        working-directory: blog-frontend
+        run: npm run build

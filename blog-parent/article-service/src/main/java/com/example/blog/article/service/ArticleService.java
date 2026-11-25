@@ -338,7 +338,7 @@ public class ArticleService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getAllTagsWithCount() {
-        List<Object[]> results = articleRepository.findTagsWithCount(ArticleStatus.PUBLISHED);
+        List<Object[]> results = articleRepository.findTagsWithCount(ArticleStatus.PUBLISHED.name());
         return results.stream()
                 .map(row -> {
                     Map<String, Object> tagInfo = new HashMap<>();

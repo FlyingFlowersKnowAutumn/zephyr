@@ -12,9 +12,7 @@ instance.interceptors.request.use(
     if (authStore.token) {
       config.headers.Authorization = `Bearer ${authStore.token}`
     }
-    if (authStore.user?.id) {
-      config.headers['X-User-Id'] = authStore.user.id
-    }
+    // 身份由网关从 token 解析后注入，前端不再自报 X-User-Id（否则可被伪造）
     return config
   },
   error => {

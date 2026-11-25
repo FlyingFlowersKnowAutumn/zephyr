@@ -11,8 +11,8 @@ spring:
         server-addr: localhost:8848
   datasource:
     url: jdbc:postgresql://localhost:5432/interaction_db
-    username: postgres
-    password: password
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true

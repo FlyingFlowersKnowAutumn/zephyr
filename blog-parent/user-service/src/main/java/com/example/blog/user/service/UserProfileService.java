@@ -41,7 +41,12 @@ public class UserProfileService {
 
         if (dto.getDisplayName() != null) user.setDisplayName(dto.getDisplayName());
         if (dto.getBio() != null) user.setBio(dto.getBio());
-        if (dto.getAvatarUrl() != null) user.setAvatarUrl(dto.getAvatarUrl());
+        if (dto.getAvatarUrl() != null) {
+            String validatedAvatar = validateAvatarUrl(dto.getAvatarUrl());
+            if (validatedAvatar != null) {
+                user.setAvatarUrl(validatedAvatar);
+            }
+        }
         if (dto.getGender() != null) user.setGender(dto.getGender());
         userRepository.save(user);
 
@@ -56,6 +61,25 @@ public class UserProfileService {
 
         log.info("Profile updated: userId={}", userId);
         return mergeToDTO(user, profile);
+    }
+
+    /**
+     * 头像地址只允许「本站相对路径」或 http(s) 外链，且不允许出现 ..。
+     * 该值后续会被拼进文件删除路径，必须在这里拦住目录穿越。
+     * 返回 null 表示不修改。
+     */
+    private String validateAvatarUrl(String avatarUrl) {
+        String url = avatarUrl == null ? "" : avatarUrl.trim();
+        if (url.isEmpty()) {
+            return null;
+        }
+        boolean allowedPrefix = url.startsWith("/")
+                || url.startsWith("http://")
+                || url.startsWith("https://");
+        if (!allowedPrefix || url.contains("..") || url.length() > 500) {
+            throw BusinessException.badRequest("非法的头像地址");
+        }
+        return url;
     }
 
     private UserProfileDTO mergeToDTO(User user, UserProfile profile) {

@@ -14,6 +14,8 @@ import java.util.UUID;
 @Component
 public class RequestLoggingFilter implements GlobalFilter, Ordered {
 
+    private static final String TRACE_HEADER = "X-Trace-Id";
+
     @Override
     public int getOrder() {
         return 1;
@@ -23,24 +25,26 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String traceId = UUID.randomUUID().toString();
         long startTime = System.currentTimeMillis();
-        
-        log.info("Request [{}] {} {} from {}", 
+
+        log.info("Request [{}] {} {} from {}",
                 traceId,
                 exchange.getRequest().getMethod(),
                 exchange.getRequest().getURI().getPath(),
                 exchange.getRequest().getRemoteAddress());
 
-        return chain.filter(exchange.mutate()
-                        .request(exchange.getRequest().mutate()
-                                .header("X-Trace-Id", traceId)
-                                .build())
-                        .build())
+        // 先移除客户端可能伪造的 traceId，再写入网关自己生成的，避免日志链路被污染
+        var mutatedRequest = exchange.getRequest().mutate()
+                .headers(headers -> headers.remove(TRACE_HEADER))
+                .header(TRACE_HEADER, traceId)
+                .build();
+
+        return chain.filter(exchange.mutate().request(mutatedRequest).build())
                 .doOnSuccess(aVoid -> {
                     long duration = System.currentTimeMillis() - startTime;
-                    int statusCode = exchange.getResponse().getStatusCode() != null ?
-                            exchange.getResponse().getStatusCode().value() : 0;
-                    log.info("Response [{}] status={}, duration={}ms", 
-                            traceId, statusCode, duration);
+                    int statusCode = exchange.getResponse().getStatusCode() != null
+                            ? exchange.getResponse().getStatusCode().value()
+                            : 0;
+                    log.info("Response [{}] status={}, duration={}ms", traceId, statusCode, duration);
                 });
     }
 }

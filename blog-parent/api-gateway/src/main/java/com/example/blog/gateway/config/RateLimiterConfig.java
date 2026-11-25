@@ -3,43 +3,33 @@ package com.example.blog.gateway.config;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 import reactor.core.publisher.Mono;
 
 @Configuration
 public class RateLimiterConfig {
 
-    @Bean
-    public RedisScript<Long> rateLimitScript() {
-        String script = """
-            local key = KEYS[1]
-            local window_size = tonumber(ARGV[1])
-            local limit = tonumber(ARGV[2])
-            local now = tonumber(ARGV[3])
-
-            redis.call('ZREMRANGEBYSCORE', key, 0, now - window_size)
-
-            local current = redis.call('ZCARD', key)
-
-            if current < limit then
-                redis.call('ZADD', key, now, now .. '-' .. math.random())
-                redis.call('EXPIRE', key, window_size / 1000 + 1)
-                return 1
-            else
-                return 0
-            end
-            """;
-
-        return RedisScript.of(script, Long.class);
-    }
-
+    /**
+     * 限流的 key：优先取 nginx 透传的真实客户端 IP。
+     * 网关是唯一入口且只监听 127.0.0.1，因此信任 X-Forwarded-For 的第一跳是安全的。
+     * 如果以后把网关直接暴露公网，需要改成在 nginx 层限流。
+     */
     @Bean
     public KeyResolver ipKeyResolver() {
-        return exchange -> Mono.just(
-                exchange.getRequest().getRemoteAddress() != null
-                        ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
-                        : "unknown"
-        );
+        return exchange -> {
+            String forwarded = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                String clientIp = forwarded.split(",")[0].trim();
+                if (!clientIp.isEmpty()) {
+                    return Mono.just(clientIp);
+                }
+            }
+            String realIp = exchange.getRequest().getHeaders().getFirst("X-Real-IP");
+            if (realIp != null && !realIp.isBlank()) {
+                return Mono.just(realIp.trim());
+            }
+            return Mono.just(exchange.getRequest().getRemoteAddress() != null
+                    ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
+                    : "unknown");
+        };
     }
 }

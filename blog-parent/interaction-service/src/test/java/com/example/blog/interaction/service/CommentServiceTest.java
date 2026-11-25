@@ -3,7 +3,9 @@ package com.example.blog.interaction.service;
 import com.example.blog.common.dto.CommentCreateDTO;
 import com.example.blog.common.dto.CommentDTO;
 import com.example.blog.common.exception.BusinessException;
+import com.example.blog.interaction.client.ArticleClient;
 import com.example.blog.interaction.client.ArticleStatsClient;
+import com.example.blog.interaction.client.UserClient;
 import com.example.blog.interaction.entity.Comment;
 import com.example.blog.interaction.repository.CommentRepository;
 import com.example.blog.interaction.util.SensitiveWordFilter;
@@ -30,6 +32,8 @@ class CommentServiceTest {
     @Mock private CommentRepository commentRepository;
     @Mock private SensitiveWordFilter sensitiveWordFilter;
     @Mock private ArticleStatsClient articleStatsClient;
+    @Mock private ArticleClient articleClient;
+    @Mock private UserClient userClient;
     @InjectMocks private CommentService commentService;
 
     @Test

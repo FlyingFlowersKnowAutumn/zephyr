@@ -66,9 +66,20 @@ public class FileUploadService {
             return;
         }
         try {
+            Path root = Paths.get(uploadPath).toAbsolutePath().normalize();
+
             String relativePath = avatarUrl.substring(baseUrl.length());
-            Path filePath = Paths.get(uploadPath, relativePath);
-            boolean deleted = Files.deleteIfExists(filePath);
+            // 去掉前导分隔符，否则 resolve 会把它当成绝对路径
+            String cleaned = relativePath.replaceFirst("^[/\\\\]+", "");
+            Path target = root.resolve(cleaned).normalize();
+
+            // 关键校验：规范化之后必须仍在上传根目录内，防止 ../../ 穿越
+            if (!target.startsWith(root)) {
+                log.warn("Blocked path traversal attempt on avatar delete: {}", avatarUrl);
+                return;
+            }
+
+            boolean deleted = Files.deleteIfExists(target);
             if (deleted) {
                 log.info("Old avatar deleted: {}", avatarUrl);
             }

@@ -13,7 +13,7 @@ import com.example.blog.interaction.util.SensitiveWordFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import com.example.blog.common.util.Pageables;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -73,7 +73,7 @@ public class CommentService {
     @Transactional(readOnly = true)
     public Page<CommentDTO> getComments(String articleId, int page, int size) {
         UUID articleUuid = UUID.fromString(articleId);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Comment> topLevelPage = commentRepository.findTopLevelByArticleId(articleUuid, pageable);
 
         return topLevelPage.map(comment -> {
@@ -145,7 +145,7 @@ public class CommentService {
     @Transactional(readOnly = true)
     public Page<CommentDTO> getCommentsByUserId(String userId, int page, int size) {
         UUID userUuid = UUID.fromString(userId);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Comment> commentPage = commentRepository.findByUserId(userUuid, pageable);
 
         return commentPage.map(comment -> {
@@ -156,7 +156,7 @@ public class CommentService {
 
     @Transactional(readOnly = true)
     public Page<CommentDTO> getAllComments(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Comment> commentPage = commentRepository.findAllNotDeleted(pageable);
 
         return commentPage.map(comment -> {

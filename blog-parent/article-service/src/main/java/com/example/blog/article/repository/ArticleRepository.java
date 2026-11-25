@@ -63,11 +63,16 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
     @Query("SELECT a FROM Article a WHERE LOWER(a.categoryName) = LOWER(:categoryName) AND a.status = :status ORDER BY a.publishedAt DESC")
     Page<Article> findByCategoryNameAndStatus(@Param("categoryName") String categoryName, @Param("status") ArticleStatus status, Pageable pageable);
     
-    @Query("SELECT DISTINCT t FROM Article a JOIN a.tags t ORDER BY t")
+    // 直接查关联表，避免 JPQL 里 article_tags.article_id(varchar) 与 articles.id(uuid) 跨类型 JOIN
+    // 与 findByTagAndStatus 里的 CAST 写法保持一致
+    @Query(value = "SELECT DISTINCT tag FROM article_tags ORDER BY tag", nativeQuery = true)
     List<String> findAllTags();
     
-    @Query("SELECT t, COUNT(a) as count FROM Article a JOIN a.tags t WHERE a.status = :status GROUP BY t ORDER BY count DESC")
-    List<Object[]> findTagsWithCount(@Param("status") ArticleStatus status);
+    @Query(value = "SELECT t.tag AS name, COUNT(*) AS cnt FROM article_tags t "
+            + "JOIN articles a ON CAST(a.id AS VARCHAR) = t.article_id "
+            + "WHERE a.status = :status GROUP BY t.tag ORDER BY COUNT(*) DESC",
+            nativeQuery = true)
+    List<Object[]> findTagsWithCount(@Param("status") String status);
     
     boolean existsByIdAndAuthorId(String id, String authorId);
 

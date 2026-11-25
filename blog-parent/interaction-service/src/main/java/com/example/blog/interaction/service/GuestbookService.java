@@ -9,7 +9,7 @@ import com.example.blog.interaction.util.SensitiveWordFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import com.example.blog.common.util.Pageables;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -43,7 +43,7 @@ public class GuestbookService {
 
     @Transactional(readOnly = true)
     public Page<GuestbookDTO> getGuestbookList(int page, int size, boolean isAdmin) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Guestbook> guestbookPage = isAdmin 
                 ? guestbookRepository.findAllNotDeleted(pageable)
                 : guestbookRepository.findAllApproved(pageable);
@@ -67,7 +67,7 @@ public class GuestbookService {
     @Transactional(readOnly = true)
     public Page<GuestbookDTO> getGuestbookByUserId(String userId, int page, int size) {
         UUID userUuid = UUID.fromString(userId);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Guestbook> guestbookPage = guestbookRepository.findByUserId(userUuid, pageable);
         return guestbookPage.map(g -> convertToDTO(g, null));
     }

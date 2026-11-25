@@ -35,8 +35,7 @@ const router = createRouter({
     {
       path: '/articles',
       name: 'Articles',
-      component: () => import('@/views/ArticlesView.vue'),
-      meta: { requiresAuth: true }
+      component: () => import('@/views/ArticlesView.vue')
     },
     {
       path: '/articles/manage',
@@ -47,8 +46,7 @@ const router = createRouter({
     {
       path: '/articles/:slug',
       name: 'ArticleDetail',
-      component: () => import('@/views/ArticleDetailView.vue'),
-      meta: { requiresAuth: true }
+      component: () => import('@/views/ArticleDetailView.vue')
     },
     {
       path: '/articles/:slug/edit',

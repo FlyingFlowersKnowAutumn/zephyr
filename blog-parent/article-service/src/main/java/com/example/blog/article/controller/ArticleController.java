@@ -7,11 +7,12 @@ import com.example.blog.common.dto.ArticleCreateDTO;
 import com.example.blog.common.dto.ArticleDTO;
 import com.example.blog.common.dto.ArticleStatsUpdateDTO;
 import com.example.blog.common.dto.ArticleUpdateDTO;
+import com.example.blog.common.util.Pageables;
+import com.example.blog.common.util.Roles;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
@@ -34,7 +35,7 @@ public class ArticleController {
             @RequestHeader("X-User-Id") String authorId,
             @RequestHeader("X-User-Name") String authorName,
             @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
-        if (!"blogger".equals(role) && !"admin".equals(role)) {
+        if (!Roles.canManage(role)) {
             return Result.fail(403, "仅博主可发布文章");
         }
         return Result.success(articleService.createArticle(dto, authorId, authorName));
@@ -61,7 +62,7 @@ public class ArticleController {
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
         ArticleStatus articleStatus = ArticleStatus.valueOf(status.toUpperCase());
         return Result.success(articleService.getArticles(articleStatus, authorId, categoryId, keyword, pageable));
     }
@@ -71,7 +72,7 @@ public class ArticleController {
             @PathVariable String authorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return Result.success(articleService.getArticlesByAuthor(authorId, pageable));
     }
 
@@ -80,7 +81,7 @@ public class ArticleController {
             @PathVariable String tag,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
+        Pageable pageable = Pageables.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
         return Result.success(articleService.getArticlesByTag(tag, pageable));
     }
 
@@ -107,7 +108,14 @@ public class ArticleController {
     @PostMapping("/{id}/stats")
     public Result<Void> updateStats(
             @PathVariable String id,
-            @RequestBody ArticleStatsUpdateDTO dto) {
+            @RequestBody ArticleStatsUpdateDTO dto,
+            @RequestHeader(value = "X-User-Id", required = false) String callerId,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        // 经网关进来的外部调用一定会带 X-User-Id（鉴权通过后由网关注入），需限制为博主/管理员；
+        // interaction-service 的内部直连调用不带该头，放行，否则评论/点赞计数无法同步。
+        if (callerId != null && !Roles.canManage(role)) {
+            return Result.fail(403, "权限不足");
+        }
         articleService.updateStats(id, dto);
         return Result.success(null);
     }

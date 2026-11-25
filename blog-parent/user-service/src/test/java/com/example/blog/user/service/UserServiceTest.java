@@ -32,6 +32,7 @@ class UserServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOperations;
+    @Mock private VerificationCodeService verificationCodeService;
     @InjectMocks private UserService userService;
 
     private final UUID userId = UUID.randomUUID();
@@ -43,6 +44,7 @@ class UserServiceTest {
         dto.setEmail("test@example.com");
         dto.setPassword("password123");
 
+        when(verificationCodeService.verifyCode(anyString(), any())).thenReturn(true);
         when(userRepository.existsByUsername("testuser")).thenReturn(false);
         when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hashed");
@@ -57,12 +59,14 @@ class UserServiceTest {
         assertNotNull(result);
         assertEquals(userId.toString(), result.getId());
         assertEquals("testuser", result.getUsername());
-        assertEquals("blogger", result.getRole());
+        // 非博主邮箱注册得到普通用户角色
+        assertEquals("user", result.getRole());
         verify(userRepository).save(any(User.class));
     }
 
     @Test
     void shouldThrowWhenUsernameExists() {
+        when(verificationCodeService.verifyCode(anyString(), any())).thenReturn(true);
         when(userRepository.existsByUsername("testuser")).thenReturn(true);
 
         RegisterDTO dto = new RegisterDTO();

@@ -254,12 +254,14 @@ function scrollDown() {
     <footer class="footer">
       <div class="footer-inner">
         <p>&copy; {{ new Date().getFullYear() }} 微风日志. All rights reserved.</p>
+        <!-- 备案号下来后取消注释并替换为真实备案号；当前是占位符，避免公开显示假备案号
         <div class="footer-icp">
           <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="icp-link">
             <span class="icp-icon">📋</span>
             <span class="icp-text">粤ICP备2025XXXXXX号</span>
           </a>
         </div>
+        -->
       </div>
     </footer>
   </div>

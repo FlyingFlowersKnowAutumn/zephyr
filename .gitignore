@@ -50,7 +50,5 @@ uploads/
 # ===== 开发文档 =====
 openspec/
 docs/superpowers/
+上线整改改动说明.md
 
-# ===== 未完成的迁移脚本 =====
-V4__add_images_to_comments.sql
-V5__convert_favorites_to_uuid.sql

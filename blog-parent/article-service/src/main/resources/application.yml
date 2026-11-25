@@ -13,8 +13,8 @@ spring:
     out-of-order: true
   datasource:
     url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
-    password: password
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:

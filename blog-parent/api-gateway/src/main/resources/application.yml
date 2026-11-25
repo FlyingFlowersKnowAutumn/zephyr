@@ -16,7 +16,7 @@ spring:
     gateway:
       discovery:
         locator:
-          enabled: true
+          enabled: false
       routes:
         - id: interaction-service
           uri: lb://interaction-service
@@ -61,7 +61,8 @@ spring:
       database: 0
 
 jwt:
-  secret: CHANGE_ME_USE_ENV_JWT_SECRET
+  # 本地开发占位值；生产由 application-prod.yml 的 ${JWT_SECRET} 覆盖
+  secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef0123456789}
   expiration: 900000
 
 management:

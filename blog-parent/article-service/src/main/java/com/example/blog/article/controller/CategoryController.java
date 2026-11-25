@@ -3,6 +3,7 @@ package com.example.blog.article.controller;
 import com.example.blog.article.entity.Category;
 import com.example.blog.article.service.CategoryService;
 import com.example.blog.common.Result;
+import com.example.blog.common.util.Roles;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -29,21 +30,33 @@ public class CategoryController {
     }
 
     @PostMapping
-    public Result<Category> createCategory(@RequestBody Map<String, String> body) {
+    public Result<Category> createCategory(@RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        if (!Roles.canManage(role)) {
+            return Result.fail(403, "仅博主可管理分类");
+        }
         String name = body.get("name");
         String description = body.get("description");
         return Result.success(categoryService.createCategory(name, description));
     }
 
     @PutMapping("/{id}")
-    public Result<Category> updateCategory(@PathVariable String id, @RequestBody Map<String, String> body) {
+    public Result<Category> updateCategory(@PathVariable String id, @RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        if (!Roles.canManage(role)) {
+            return Result.fail(403, "仅博主可管理分类");
+        }
         String name = body.get("name");
         String description = body.get("description");
         return Result.success(categoryService.updateCategory(id, name, description));
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> deleteCategory(@PathVariable String id) {
+    public Result<Void> deleteCategory(@PathVariable String id,
+            @RequestHeader(value = "X-User-Role", defaultValue = "user") String role) {
+        if (!Roles.canManage(role)) {
+            return Result.fail(403, "仅博主可管理分类");
+        }
         categoryService.deleteCategory(id);
         return Result.success(null);
     }

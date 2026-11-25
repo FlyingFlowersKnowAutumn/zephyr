@@ -2,7 +2,9 @@ package com.example.blog.article.service;
 
 import com.example.blog.article.entity.Article;
 import com.example.blog.article.entity.Article.ArticleStatus;
+import com.example.blog.article.entity.Tag;
 import com.example.blog.article.repository.ArticleRepository;
+import com.example.blog.article.repository.ArticleTagMapRepository;
 import com.example.blog.common.dto.ArticleCreateDTO;
 import com.example.blog.common.dto.ArticleDTO;
 import com.example.blog.common.exception.BusinessException;
@@ -28,6 +30,9 @@ import static org.mockito.Mockito.*;
 class ArticleServiceTest {
 
     @Mock private ArticleRepository articleRepository;
+    @Mock private ArticleTagMapRepository articleTagMapRepository;
+    @Mock private CategoryService categoryService;
+    @Mock private TagService tagService;
     @InjectMocks private ArticleService articleService;
 
     @Test
@@ -38,6 +43,7 @@ class ArticleServiceTest {
         dto.setTags(List.of("java"));
 
         when(articleRepository.existsBySlug(anyString())).thenReturn(false);
+        when(tagService.getTagByName("java")).thenReturn(Tag.builder().id("tag-1").name("java").build());
         when(articleRepository.save(any(Article.class))).thenAnswer(inv -> {
             Article a = inv.getArgument(0);
             a.setId("article-1");
@@ -78,7 +84,7 @@ class ArticleServiceTest {
     }
 
     @Test
-    void shouldUseTsVectorSearchWhenKeywordProvided() {
+    void shouldSearchByTitleWhenKeywordProvided() {
         Pageable pageable = PageRequest.of(0, 10);
         Article article = Article.builder()
                 .id("article-1")
@@ -91,12 +97,12 @@ class ArticleServiceTest {
                 .build();
         Page<Article> page = new PageImpl<>(List.of(article));
 
-        when(articleRepository.searchByTsVector("搜索词", "PUBLISHED", pageable)).thenReturn(page);
+        when(articleRepository.searchByTitle("搜索词", ArticleStatus.PUBLISHED, pageable)).thenReturn(page);
 
         Page<ArticleDTO> result = articleService.getArticles(ArticleStatus.PUBLISHED, null, null, "搜索词", pageable);
 
         assertEquals(1, result.getTotalElements());
-        verify(articleRepository).searchByTsVector("搜索词", "PUBLISHED", pageable);
+        verify(articleRepository).searchByTitle("搜索词", ArticleStatus.PUBLISHED, pageable);
         verify(articleRepository, never()).findPublishedArticles(any(), any());
     }
 
