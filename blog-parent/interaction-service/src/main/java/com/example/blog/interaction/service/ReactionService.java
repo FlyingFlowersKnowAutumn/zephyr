@@ -33,8 +33,8 @@ public class ReactionService {
         if (existing.isPresent()) {
             reactionRepository.delete(existing.get());
             long count = reactionRepository.countByArticleId(articleUuid);
-            articleStatsClient.syncLikeCount(articleId, -1);
-            log.info("Reaction removed: articleId={}, userId={}", articleId, userId);
+            articleStatsClient.syncLikeCount(articleId, count);
+            log.info("Reaction removed: articleId={}, userId={}, total={}", articleId, userId, count);
             return ReactionResponseDTO.builder().liked(false).likeCount(count).build();
         } else {
             Reaction reaction = Reaction.builder()
@@ -43,8 +43,8 @@ public class ReactionService {
                     .build();
             reactionRepository.save(reaction);
             long count = reactionRepository.countByArticleId(articleUuid);
-            articleStatsClient.syncLikeCount(articleId, 1);
-            log.info("Reaction added: articleId={}, userId={}", articleId, userId);
+            articleStatsClient.syncLikeCount(articleId, count);
+            log.info("Reaction added: articleId={}, userId={}, total={}", articleId, userId, count);
             return ReactionResponseDTO.builder().liked(true).likeCount(count).build();
         }
     }

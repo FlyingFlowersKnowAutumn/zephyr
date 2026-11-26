@@ -48,6 +48,8 @@ class CommentServiceTest {
             c.setId(UUID.randomUUID());
             return c;
         });
+        // 同步给 article-service 的是"当前真实总数"，由明细表统计得出
+        when(commentRepository.countByArticleIdAndDeletedAtIsNull(UUID.fromString(ARTICLE_ID))).thenReturn(1L);
 
         CommentDTO result = commentService.createComment(dto, USER_ID, "User");
 
@@ -55,7 +57,7 @@ class CommentServiceTest {
         assertEquals(ARTICLE_ID, result.getArticleId());
         assertEquals("正常评论", result.getContent());
         verify(sensitiveWordFilter).filter("正常评论");
-        verify(articleStatsClient).syncCommentCount(ARTICLE_ID, 1);
+        verify(articleStatsClient).syncCommentCount(ARTICLE_ID, 1L);
     }
 
     @Test

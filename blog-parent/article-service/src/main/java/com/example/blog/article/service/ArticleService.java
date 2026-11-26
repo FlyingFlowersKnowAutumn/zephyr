@@ -319,13 +319,13 @@ public class ArticleService {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> BusinessException.notFound("文章不存在"));
 
-        if (dto.getCommentCountDelta() != null && dto.getCommentCountDelta() != 0) {
-            int newCount = Math.max(0, article.getCommentCount() + dto.getCommentCountDelta());
-            article.setCommentCount(newCount);
+        // 覆盖语义：传过来的就是明细表算出的真实总数，直接赋值。
+        // 与增量相比，重复调用、乱序到达、失败重试都不会把计数弄脏。
+        if (dto.getCommentCount() != null) {
+            article.setCommentCount(Math.max(0, dto.getCommentCount()));
         }
-        if (dto.getLikeCountDelta() != null && dto.getLikeCountDelta() != 0) {
-            int newCount = Math.max(0, article.getLikeCount() + dto.getLikeCountDelta());
-            article.setLikeCount(newCount);
+        if (dto.getLikeCount() != null) {
+            article.setLikeCount(Math.max(0, dto.getLikeCount()));
         }
 
         articleRepository.save(article);

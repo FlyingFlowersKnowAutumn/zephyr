@@ -64,7 +64,7 @@ public class CommentService {
                 .build();
 
         Comment saved = commentRepository.save(comment);
-        articleStatsClient.syncCommentCount(dto.getArticleId(), 1);
+        syncArticleCommentCount(articleUuid);
 
         log.info("Comment created: id={}, articleId={}, userId={}", saved.getId(), saved.getArticleId(), userId);
         return convertToDTO(saved, replyToUserId);
@@ -127,9 +127,24 @@ public class CommentService {
 
         comment.setDeletedAt(LocalDateTime.now());
         commentRepository.save(comment);
-        articleStatsClient.syncCommentCount(comment.getArticleId().toString(), -1);
+        syncArticleCommentCount(comment.getArticleId());
 
         log.info("Comment deleted: id={}, articleId={}", id, comment.getArticleId());
+    }
+
+    /**
+     * 把该文章当前的评论总数同步给 article-service。
+     *
+     * <p>传绝对值而不是增减量：即使这次同步失败，下一次发表/删除评论时也会带上
+     * 最新的真实总数再推一次，计数能自己纠正回来，不需要人工对账。
+     */
+    private void syncArticleCommentCount(UUID articleUuid) {
+        try {
+            long total = commentRepository.countByArticleIdAndDeletedAtIsNull(articleUuid);
+            articleStatsClient.syncCommentCount(articleUuid.toString(), total);
+        } catch (Exception e) {
+            log.warn("Failed to count comments for article {}: {}", articleUuid, e.getMessage());
+        }
     }
 
     @Transactional
