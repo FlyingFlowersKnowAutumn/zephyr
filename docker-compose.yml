@@ -180,14 +180,16 @@ services:
     networks:
       - blog-network
 
-  # 内网穿透改成按需启用：docker compose --profile tunnel up -d cloudflared
-  # 需要先配置 Cloudflare Named Tunnel 并把 hostname 指向 http://nginx:80
+  # Cloudflare Named Tunnel：token 取自 .env 的 CLOUDFLARE_TUNNEL_TOKEN，
+  # 公网域名的 Public Hostname 在 Cloudflare 面板里指向 http://nginx:80
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: blog-cloudflared
-    profiles: ["tunnel"]
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://nginx:80
+    # --protocol http2：走 TCP/443 而不是 QUIC(UDP)。家庭宽带上 UDP/443 常被限速或丢包，
+    # 实测 quic 会在十几分钟出现 "no recent network activity" 断连（表现为偶发 502），
+    # http2 更稳；个人博客带宽需求低，这点吞吐差别可以忽略。
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?} --protocol http2
     depends_on:
       - nginx
     networks:
