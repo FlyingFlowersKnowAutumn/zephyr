@@ -146,7 +146,8 @@ const articleStore = useArticleStore()
 
 const slugParam = computed(() => route.params.slug as string)
 const article = computed(() => articleStore.currentArticle)
-const articleId = computed(() => article.value?.id || slugParam.value)
+// 只认真实 ID：用 slug 兜底会让评论组件带着 slug 发起请求，网关按 UUID 解析必然 400
+const articleId = computed(() => article.value?.id || '')
 const loading = computed(() => articleStore.loading)
 const renderedContent = computed(() => article.value ? renderMarkdown(article.value.content) : '')
 const showCopyrightModal = ref(false)
@@ -255,7 +256,8 @@ function formatDate(dateString: string) {
       </div>
 
       <div class="article-body">
-        <article v-if="article && !loading" class="article-content">
+        <!-- 同理：有文章就直接渲染，不再看全局的 loading，否则侧栏一拉数据正文就闪成「加载中...」 -->
+        <article v-if="article" class="article-content">
           <div v-if="article.excerpt" class="article-excerpt">
             "{{ article.excerpt }}"
           </div>
@@ -290,15 +292,16 @@ function formatDate(dateString: string) {
         </article>
 
         <div v-else-if="loading" class="loading">加载中...</div>
-
         <div v-else class="not-found">
           <p>文章不存在或已被删除</p>
           <button class="btn-primary" @click="goBack">返回列表</button>
         </div>
       </div>
 
+      <!-- 只用 article 判断：articleStore.loading 是全局共享的，侧栏拉「最新文章」时会把它置 true，
+           导致这里的 v-if 先 false 再 true，ActionPanel 被销毁重建，评论/点赞/收藏各请求两遍。 -->
       <ActionPanel
-        v-if="article && !loading"
+        v-if="article?.id"
         :article-id="articleId"
         :article-author-id="article?.authorId"
         :article-title="article?.title"

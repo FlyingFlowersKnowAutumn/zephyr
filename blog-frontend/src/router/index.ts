@@ -94,6 +94,12 @@ const router = createRouter({
       path: '/tags',
       name: 'Tags',
       component: () => import('@/views/TagView.vue')
+    },
+    {
+      // 兜底：没有这条时，访问任何不存在的地址都只会渲染出一个空白页
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: () => import('@/views/NotFoundView.vue')
     }
   ]
 })

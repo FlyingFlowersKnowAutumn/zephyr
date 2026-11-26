@@ -236,12 +236,12 @@ function validateAndSelectFile(file: File) {
   const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
   
   if (!validTypes.includes(file.type)) {
-    alert('只支持 jpg、jpeg、png、gif、webp 格式的图片')
+    ElMessage.warning('只支持 jpg、jpeg、png、gif、webp 格式的图片')
     return
   }
   
   if (file.size > maxSize) {
-    alert('图片大小不能超过 5MB')
+    ElMessage.warning('图片大小不能超过 5MB')
     return
   }
   
@@ -268,12 +268,13 @@ async function uploadAvatar() {
     if (result.code === 0 && result.data?.avatarUrl) {
       form.value.avatarUrl = result.data.avatarUrl
       authStore.updateUser({ avatarUrl: result.data.avatarUrl })
+      ElMessage.success('头像已更新')
       closeAvatarModal()
     } else {
-      alert(result.message || '上传失败')
+      ElMessage.error(result.message || '上传失败')
     }
   } catch {
-    alert('上传失败')
+    ElMessage.error('上传失败，请检查网络后重试')
   } finally {
     uploading.value = false
   }

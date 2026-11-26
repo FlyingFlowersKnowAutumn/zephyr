@@ -7,6 +7,7 @@ import { ElMessage } from 'element-plus'
 import gsap from 'gsap'
 import Header from '@/components/layout/Header.vue'
 import * as authApi from '@/api/auth'
+import { pickErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -43,7 +44,7 @@ async function handleRegister() {
     ElMessage.success('注册成功，请登录')
     router.push('/login')
   } catch (error: any) {
-    ElMessage.error(error.message || '注册失败')
+    ElMessage.error(pickErrorMessage(error, '注册失败'))
   } finally {
     isLoading.value = false
   }

@@ -180,6 +180,7 @@ async function submitComment() {
     })
     if (result.code === 0 && result.data) {
       comments.value.unshift(result.data)
+      commentCount.value += 1
       commentText.value = ''
       commentImages.value = []
       ElMessage.success('评论已提交')
@@ -206,6 +207,7 @@ async function handleDeleteComment(id: string) {
         })
       }
       comments.value = removeComment(comments.value)
+      commentCount.value = Math.max(0, commentCount.value - 1)
       ElMessage.success('评论已删除')
     } else {
       ElMessage.error(result.message || '删除失败')
@@ -223,21 +225,36 @@ function isAuthor(comment: CommentDTO): boolean {
   return comment.userId === props.articleAuthorId
 }
 
+// 点赞/收藏是 toggle 语义：连点两次等于取消又点赞，网络慢时用户很容易连点，
+// 所以请求期间直接忽略后续点击，避免状态来回翻转。
+const togglingLike = ref(false)
+const togglingFavorite = ref(false)
+
 async function toggleLike() {
-  if (!authStore.isLoggedIn) return
-  const result = await reactionApi.toggleReaction(props.articleId)
-  if (result.code === 0 && result.data) {
-    liked.value = result.data.liked
-    likeCount.value = result.data.likeCount
+  if (!authStore.isLoggedIn || togglingLike.value) return
+  togglingLike.value = true
+  try {
+    const result = await reactionApi.toggleReaction(props.articleId)
+    if (result.code === 0 && result.data) {
+      liked.value = result.data.liked
+      likeCount.value = result.data.likeCount
+    }
+  } finally {
+    togglingLike.value = false
   }
 }
 
 async function toggleFavorite() {
-  if (!authStore.isLoggedIn) return
-  const result = await favoriteApi.toggleFavorite(props.articleId)
-  if (result.code === 0 && result.data) {
-    favorited.value = result.data.favorited
-    favoriteCount.value = result.data.favoriteCount
+  if (!authStore.isLoggedIn || togglingFavorite.value) return
+  togglingFavorite.value = true
+  try {
+    const result = await favoriteApi.toggleFavorite(props.articleId)
+    if (result.code === 0 && result.data) {
+      favorited.value = result.data.favorited
+      favoriteCount.value = result.data.favoriteCount
+    }
+  } finally {
+    togglingFavorite.value = false
   }
 }
 

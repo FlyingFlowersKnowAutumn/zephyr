@@ -1,15 +1,25 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeMount, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onBeforeMount, onUnmounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 
 import gsap from 'gsap'
 import Header from '@/components/layout/Header.vue'
 import * as authApi from '@/api/auth'
+import { pickErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+
+// 被 401 踢到登录页时会带上 ?redirect=原路径，登录成功后回到那里，而不是一律回首页
+const redirectTarget = computed(() => {
+  const raw = route.query.redirect
+  const path = typeof raw === 'string' ? raw : ''
+  // 只允许站内相对路径，避免被构造成跳去外站
+  return path.startsWith('/') && !path.startsWith('//') ? path : '/'
+})
 const animationPlayed = ref(false)
 
 const isLoginMode = ref(true)
@@ -32,7 +42,7 @@ const isLoading = ref(false)
 
 onBeforeMount(() => {
   if (authStore.isLoggedIn) {
-    router.push('/')
+    router.push(redirectTarget.value)
   }
 })
 
@@ -48,9 +58,9 @@ async function handleLogin() {
       password: password.value
     })
     ElMessage.success('登录成功')
-    router.push('/')
+    router.push(redirectTarget.value)
   } catch (error: any) {
-    ElMessage.error(error.message || '登录失败')
+    ElMessage.error(pickErrorMessage(error, '登录失败'))
   } finally {
     isLoading.value = false
   }
@@ -68,9 +78,9 @@ async function handlePasswordlessLogin() {
       code: captcha.value
     })
     ElMessage.success('登录成功')
-    router.push('/')
+    router.push(redirectTarget.value)
   } catch (error: any) {
-    ElMessage.error(error.message || '登录失败')
+    ElMessage.error(pickErrorMessage(error, '登录失败'))
   } finally {
     isLoading.value = false
   }
@@ -98,7 +108,7 @@ async function handleRegister() {
     email.value = ''
     captcha.value = ''
   } catch (error: any) {
-    ElMessage.error(error.message || '注册失败')
+    ElMessage.error(pickErrorMessage(error, '注册失败'))
   } finally {
     isLoading.value = false
   }
@@ -117,13 +127,24 @@ async function handleResetPassword() {
       code: resetCaptcha.value,
       newPassword: resetNewPassword.value
     })
-    ElMessage.success('密码修改成功')
+    // 密码改了，旧 token 在服务端仍然有效（JWT 无状态），
+    // 所以本地必须清掉登录态，否则用户会停在"看着已登录、其实密码已经变了"的错乱状态里。
+    if (authStore.isLoggedIn) {
+      authStore.logout()
+      ElMessage.success('密码修改成功，请用新密码重新登录')
+    } else {
+      ElMessage.success('密码修改成功')
+    }
     showResetModal.value = false
     resetEmail.value = ''
     resetCaptcha.value = ''
     resetNewPassword.value = ''
+    username.value = ''
+    password.value = ''
+    isLoginMode.value = true
+    isPasswordlessMode.value = false
   } catch (error: any) {
-    ElMessage.error(error.message || '密码修改失败')
+    ElMessage.error(pickErrorMessage(error, '密码修改失败'))
   } finally {
     isLoading.value = false
   }
@@ -160,7 +181,7 @@ async function getCaptcha() {
     clearInterval(timer)
     isCaptchaDisabled.value = false
     captchaBtnText.value = '验证码'
-    ElMessage.error(error.response?.data?.message || '验证码发送失败')
+    ElMessage.error(pickErrorMessage(error, '验证码发送失败'))
   }
 }
 
@@ -193,7 +214,7 @@ async function getResetCaptcha() {
     clearInterval(timer)
     isResetCaptchaDisabled.value = false
     resetCaptchaBtnText.value = '验证码'
-    ElMessage.error(error.response?.data?.message || '验证码发送失败')
+    ElMessage.error(pickErrorMessage(error, '验证码发送失败'))
   }
 }
 

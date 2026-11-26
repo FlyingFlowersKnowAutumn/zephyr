@@ -7,6 +7,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { uploadImage } from '@/api/upload'
 import type { CreateArticleDTO, UpdateArticleDTO } from '@/types'
 import { ElMessage } from 'element-plus'
+import { pickErrorMessage } from '@/utils/error'
 import Header from '@/components/layout/Header.vue'
 
 const route = useRoute()
@@ -447,7 +448,7 @@ async function handleCoverUpload(event: Event) {
     const url = await uploadImage(file)
     if (url) coverImage.value = url
   } catch (e: any) {
-    ElMessage.error(e.message || '封面上传失败')
+    ElMessage.error(pickErrorMessage(e, '封面上传失败'))
   } finally {
     coverUploading.value = false
     target.value = ''
@@ -475,7 +476,7 @@ async function handleContentUpload(event: Event) {
     const url = await uploadImage(file)
     if (url) insertImageToContent(url, file.name)
   } catch (e: any) {
-    ElMessage.error(e.message || '图片上传失败')
+    ElMessage.error(pickErrorMessage(e, '图片上传失败'))
   } finally {
     contentUploading.value = false
     target.value = ''
