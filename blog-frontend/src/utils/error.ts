@@ -21,6 +21,19 @@ export function pickErrorMessage(error: unknown, fallback = '操作失败，请�
     return data.message.trim()
   }
 
+  // 我们自己 throw 的业务错误（如登录失败时 store 里 `throw new Error('用户名或密码错误')`）：
+  // 它没有 response、没有 request、也不是 axios 的错，message 就是要显示给用户的中文。
+  // 不做这一步的话会掉到下面「没有 response ⇒ 无法连接服务器」，把"密码错误"说成"网络错误"。
+  if (
+    err &&
+    (err as { isAxiosError?: boolean }).isAxiosError !== true &&
+    !err.response &&
+    typeof err.message === 'string' &&
+    err.message.trim()
+  ) {
+    return err.message.trim()
+  }
+
   if (err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message || '')) {
     return '请求超时，请检查网络后重试'
   }
