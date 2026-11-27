@@ -692,12 +692,19 @@ async function saveAnnouncement() {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-accent);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .announcement-content {
   font-size: 0.85rem;
   color: var(--color-text-secondary);
   line-height: 1.5;
+  /* 公告里常出现长链接或连续英文，默认不会断行会撑出卡片 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  /* 保留作者在编辑框里敲的换行 */
+  white-space: pre-wrap;
 }
 
 .edit-announcement-btn {
