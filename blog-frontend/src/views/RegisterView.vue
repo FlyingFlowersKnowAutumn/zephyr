@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeMount, onUnmounted } from 'vue'
+import { useMeteors } from '@/composables/useMeteors'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
@@ -83,45 +84,9 @@ async function getCaptcha() {
   }
 }
 
-function initMeteors() {
-  const meteors = document.querySelectorAll('.meteor')
-  meteors.forEach((m, index) => {
-    gsap.killTweensOf(m)
-    
-    const startFromTop = Math.random() > 0.5
-    let startX, startY, endX, endY
-    
-    if (startFromTop) {
-      startX = Math.random() * (window.innerWidth + 200) - 100
-      startY = -200
-      const distance = window.innerHeight + 300
-      endX = startX - distance
-      endY = startY + distance
-    } else {
-      startX = window.innerWidth + 200
-      startY = Math.random() * (window.innerHeight + 200) - 100
-      const distance = window.innerWidth + 300
-      endX = startX - distance
-      endY = startY + distance
-    }
-    
-    gsap.set(m, {
-      x: startX,
-      y: startY,
-      rotation: 315,
-      opacity: 0
-    })
-    gsap.to(m, {
-      x: endX,
-      y: endY,
-      opacity: 0.7,
-      duration: 5 + Math.random() * 4,
-      delay: index * 0.15,
-      repeat: -1,
-      ease: 'linear'
-    })
-  })
-}
+const meteorCanvas = ref<HTMLCanvasElement | null>(null)
+
+useMeteors(meteorCanvas)
 
 onMounted(() => {
   if (animationPlayed.value) return
@@ -130,12 +95,9 @@ onMounted(() => {
   gsap.fromTo('.login-card', { opacity: 0, x: 50 }, { opacity: 1, x: 0, duration: 0.6, ease: 'power3.out' })
   gsap.fromTo('.left-section', { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.6, delay: 0.2, ease: 'power3.out' })
   
-  initMeteors()
-  window.addEventListener('resize', initMeteors)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', initMeteors)
 })
 </script>
 
@@ -144,7 +106,7 @@ onUnmounted(() => {
     <Header @open-search="$emit('open-search')" />
     
     <div class="meteors-container">
-      <div v-for="i in 40" :key="i" class="meteor"></div>
+      <canvas ref="meteorCanvas" class="meteor-canvas"></canvas>
     </div>
     
     <div class="login-wrapper">
@@ -239,14 +201,12 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.meteor {
+.meteor-canvas {
   position: absolute;
-  width: 150px;
-  height: 2px;
-  background: linear-gradient(315deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.9));
-  border-radius: 50%;
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
-  opacity: 0.7;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .login-wrapper {

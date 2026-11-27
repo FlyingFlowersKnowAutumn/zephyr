@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, ref, watch, nextTick } from 'vue'
+import { onMounted, computed, ref } from 'vue'
+import { useMeteors } from '@/composables/useMeteors'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { getArticle, getArticleBySlug } from '@/api/article'
@@ -14,131 +15,8 @@ const emit = defineEmits(['open-search'])
 
 const meteorCanvas = ref<HTMLCanvasElement | null>(null)
 
-interface Meteor {
-  x: number
-  y: number
-  length: number
-  speed: number
-  size: number
-  opacity: number
-  angle: number
-}
+useMeteors(meteorCanvas)
 
-let meteors: Meteor[] = []
-let animationId: number | null = null
-
-function initMeteors(width: number, height: number) {
-  meteors = []
-  const count = Math.min(Math.floor(width / 80), 30)
-  
-  for (let i = 0; i < count; i++) {
-    meteors.push(createMeteor(width, height, true))
-  }
-}
-
-function createMeteor(width: number, height: number, randomY = false): Meteor {
-  const depth = Math.random()
-  const size = depth * 1.5 + 0.5
-  const baseSpeed = 0.35
-  const speed = baseSpeed * (depth * 1.5 + 0.3)
-  
-  return {
-    x: Math.random() * width + width * 0.1,
-    y: randomY ? Math.random() * height * 0.8 : -20,
-    length: depth * 120 + 60,
-    speed,
-    size,
-    opacity: depth * 0.6 + 0.2,
-    angle: Math.PI / 4 + (Math.random() - 0.5) * 0.15
-  }
-}
-
-function updateMeteors(width: number, height: number) {
-  meteors.forEach((meteor, index) => {
-    meteor.x -= Math.cos(meteor.angle) * meteor.speed
-    meteor.y += Math.sin(meteor.angle) * meteor.speed
-    
-    if (meteor.x < -100 || meteor.y > height + 100) {
-      meteors[index] = createMeteor(width, height)
-    }
-  })
-}
-
-function drawMeteors(ctx: CanvasRenderingContext2D) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-  
-  meteors.forEach(meteor => {
-    ctx.beginPath()
-    ctx.moveTo(meteor.x, meteor.y)
-    ctx.lineTo(
-      meteor.x + Math.cos(meteor.angle) * meteor.length,
-      meteor.y - Math.sin(meteor.angle) * meteor.length
-    )
-    
-    const gradient = ctx.createLinearGradient(
-      meteor.x, meteor.y,
-      meteor.x + Math.cos(meteor.angle) * meteor.length,
-      meteor.y - Math.sin(meteor.angle) * meteor.length
-    )
-    gradient.addColorStop(0, `rgba(255, 255, 255, ${meteor.opacity})`)
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-    
-    ctx.strokeStyle = gradient
-    ctx.lineWidth = meteor.size
-    ctx.lineCap = 'round'
-    ctx.stroke()
-    
-    ctx.beginPath()
-    ctx.arc(meteor.x, meteor.y, meteor.size / 2, 0, Math.PI * 2)
-    ctx.fillStyle = `rgba(255, 255, 255, ${meteor.opacity})`
-    ctx.shadowColor = '#fff'
-    ctx.shadowBlur = meteor.size * 2
-    ctx.fill()
-    ctx.shadowBlur = 0
-  })
-}
-
-function animate() {
-  const canvas = meteorCanvas.value
-  if (!canvas) return
-  
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  
-  updateMeteors(canvas.width, canvas.height)
-  drawMeteors(ctx)
-  
-  animationId = requestAnimationFrame(animate)
-}
-
-function resizeCanvas() {
-  const canvas = meteorCanvas.value
-  if (!canvas) return
-  
-  const heroHeight = Math.max(window.innerHeight * 0.333, 250)
-  canvas.width = window.innerWidth
-  canvas.height = heroHeight
-  
-  initMeteors(canvas.width, canvas.height)
-}
-
-function startMeteorAnimation() {
-  const canvas = meteorCanvas.value
-  if (!canvas) return
-  
-  resizeCanvas()
-  animate()
-  
-  window.addEventListener('resize', resizeCanvas)
-}
-
-function stopMeteorAnimation() {
-  if (animationId) {
-    cancelAnimationFrame(animationId)
-    animationId = null
-  }
-  window.removeEventListener('resize', resizeCanvas)
-}
 
 const router = useRouter()
 const route = useRoute()
@@ -172,18 +50,6 @@ onMounted(async () => {
   } catch {
     articleStore.fetchArticle(slugParam.value)
   }
-})
-
-watch(article, (newArticle) => {
-  if (newArticle && newArticle.coverImage) {
-    nextTick(() => {
-      startMeteorAnimation()
-    })
-  }
-}, { immediate: true })
-
-onUnmounted(() => {
-  stopMeteorAnimation()
 })
 
 function goBack() {

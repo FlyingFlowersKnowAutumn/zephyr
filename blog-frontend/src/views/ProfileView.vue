@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useMeteors } from '@/composables/useMeteors'
 import { useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getUserProfile, updateUserProfile } from '@/api/profile'
@@ -75,51 +76,13 @@ const targetUserId = computed(() => {
   return id || authStore.user?.id || ''
 })
 
-function initMeteors() {
-  const meteors = document.querySelectorAll('.meteor')
-  meteors.forEach((m, index) => {
-    gsap.killTweensOf(m)
+const meteorCanvas = ref<HTMLCanvasElement | null>(null)
 
-    const startFromTop = Math.random() > 0.5
-    let startX, startY, endX, endY
-
-    if (startFromTop) {
-      startX = Math.random() * (window.innerWidth + 200) - 100
-      startY = -200
-      const distance = window.innerHeight + 300
-      endX = startX - distance
-      endY = startY + distance
-    } else {
-      startX = window.innerWidth + 200
-      startY = Math.random() * (window.innerHeight + 200) - 100
-      const distance = window.innerWidth + 300
-      endX = startX - distance
-      endY = startY + distance
-    }
-
-    gsap.set(m, {
-      x: startX,
-      y: startY,
-      rotation: 315,
-      opacity: 0
-    })
-    gsap.to(m, {
-      x: endX,
-      y: endY,
-      opacity: 0.7,
-      duration: 5 + Math.random() * 4,
-      delay: index * 0.15,
-      repeat: -1,
-      ease: 'linear'
-    })
-  })
-}
+useMeteors(meteorCanvas)
 
 onMounted(() => {
   bgImage.value = getRandomBackground()
   loadProfile()
-  initMeteors()
-  window.addEventListener('resize', initMeteors)
 
   gsap.to('.page-mask', {
     opacity: 0,
@@ -135,7 +98,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', initMeteors)
 })
 
 async function loadProfile() {
@@ -425,7 +387,7 @@ async function loadFavoritedArticles() {
     <div class="bg-layer" :style="{ backgroundImage: `url(${bgImage})` }"></div>
 
     <div class="meteors-container">
-      <div v-for="i in 40" :key="i" class="meteor"></div>
+      <canvas ref="meteorCanvas" class="meteor-canvas"></canvas>
     </div>
 
     <Header />
@@ -815,14 +777,12 @@ async function loadFavoritedArticles() {
   z-index: -1;
 }
 
-.meteor {
+.meteor-canvas {
   position: absolute;
-  width: 150px;
-  height: 2px;
-  background: linear-gradient(315deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.9));
-  border-radius: 50%;
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
-  opacity: 0.7;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .profile-wrapper {
