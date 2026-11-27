@@ -6,6 +6,8 @@ x-common-env: &common-env
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 未在 .env 中设置}
   POSTGRES_USER: ${POSTGRES_USER:-postgres}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未在 .env 中设置}
+  # 站点所有者邮箱：注册时据此授予 blogger 角色，未设置则一律普通用户
+  BLOG_OWNER_EMAIL: ${BLOG_OWNER_EMAIL:-}
 
 x-java-healthcheck: &java-healthcheck
   interval: 30s

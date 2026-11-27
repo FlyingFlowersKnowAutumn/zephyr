@@ -7,6 +7,7 @@ import com.example.blog.user.entity.User;
 import com.example.blog.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,14 @@ public class UserService {
     private static final String REFRESH_TOKEN_PREFIX = "auth:refresh:";
     private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
 
+    /**
+     * 站点所有者邮箱：注册时据此判定 blogger 角色。
+     * 由 BLOG_OWNER_EMAIL 环境变量注入，不把个人邮箱写死在代码里；
+     * 未配置时任何人都注册成普通用户（不会误授权）。
+     */
+    @Value("${blog.owner-email:}")
+    private String ownerEmail;
+
     @Transactional
     public UserDTO register(RegisterDTO dto) {
         if (!verificationCodeService.verifyCode(dto.getEmail(), dto.getCode())) {
@@ -44,7 +53,9 @@ public class UserService {
             throw BusinessException.conflict("邮箱已被注册");
         }
 
-        String role = "owner@example.com".equals(dto.getEmail())
+        String role = ownerEmail != null
+                && !ownerEmail.isBlank()
+                && ownerEmail.equalsIgnoreCase(dto.getEmail())
                 ? RoleEnum.BLOGGER.getValue()
                 : RoleEnum.USER.getValue();
 
