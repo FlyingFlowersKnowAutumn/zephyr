@@ -45,6 +45,8 @@ export interface UseMeteorsOptions {
   minCount?: number
   /** 与水平线的角度范围（度） */
   angleRange?: [number, number]
+  /** 头部飞行速度范围（px/秒）。调小会更慢更写意 */
+  speedRange?: [number, number]
   /** 头部颜色 RGB */
   headColor?: [number, number, number]
   /** 用户开启「减少动态效果」时是否停止绘制 */
@@ -56,6 +58,7 @@ const DEFAULTS: Required<UseMeteorsOptions> = {
   maxCount: 26,
   minCount: 7,
   angleRange: [26, 46],
+  speedRange: [115, 330],
   headColor: [236, 246, 255],
   respectReducedMotion: true,
 }
@@ -89,18 +92,24 @@ export function useMeteors(
     typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-  function createMeteor(spawnAnywhere: boolean): Meteor {
+  function createMeteor(): Meteor {
     const angle = (rand(opts.angleRange[0], opts.angleRange[1]) * Math.PI) / 180
     // depth 越大越"近"：更粗、更快、更亮
     const depth = Math.random() ** 1.6
-    const speed = rand(230, 380) + depth * 300
+    const [speedMin, speedMax] = opts.speedRange
+    const speed = speedMin + (speedMax - speedMin) * depth
     const length = 70 + depth * 190
-    const startX = spawnAnywhere
-      ? rand(-cssWidth * 0.05, cssWidth * 1.2)
-      : rand(cssWidth * 0.35, cssWidth * 1.2)
-    const startY = spawnAnywhere
-      ? rand(-cssHeight * 0.25, cssHeight * 0.95)
-      : rand(-cssHeight * 0.35, -12)
+    // 流星朝左下飞，只会从「上边缘」或「右边缘」进入画面。
+    // 只从上边缘进是不够的：宽屏（如 1248×808）要覆盖右下角 (W, H)，
+    // 从上方出发得在 x = W + H/tanθ ≈ 2400 起跳，远在画面之外，
+    // 所以那一角永远等不到流星。改成一半走上边缘、一半走右边缘，两条边都铺满。
+    const fromTop = Math.random() < 0.5
+    const startX = fromTop
+      ? rand(-cssWidth * 0.08, cssWidth * 1.06)
+      : rand(cssWidth * 0.9, cssWidth * 1.2)
+    const startY = fromTop
+      ? -rand(length * 0.6, cssHeight * 0.32)
+      : rand(-cssHeight * 0.15, cssHeight * 1.02)
 
     return {
       x: startX,
@@ -123,7 +132,7 @@ export function useMeteors(
       opts.maxCount,
     )
     meteors = Array.from({ length: count }, () => {
-      const meteor = createMeteor(true)
+      const meteor = createMeteor()
       // 初始化时让每颗处于生命周期的不同阶段，避免一进页面全部同一起跑线
       meteor.age = Math.random() * meteor.life * 0.8
       return meteor
@@ -193,7 +202,7 @@ export function useMeteors(
       meteor.y += dy * meteor.speed * dt
 
       if (meteor.age >= meteor.life || meteor.x < -meteor.length || meteor.y > cssHeight + meteor.length) {
-        meteors[i] = createMeteor(false)
+        meteors[i] = createMeteor()
         continue
       }
 
