@@ -65,7 +65,7 @@ function handleClick() {
             <span>{{ formatDate(article.publishedAt || article.createdAt) }}</span>
           </span>
           <span v-if="article.categoryName" class="meta-divider">|</span>
-          <RouterLink v-if="article.categoryName" :to="{ path: '/categories', query: { category: article.categoryName } }" class="meta-category">
+          <RouterLink v-if="article.categoryName" :to="{ path: '/categories', query: { category: article.categoryName } }" class="meta-category" @click.stop>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
