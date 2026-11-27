@@ -26,6 +26,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final RedisTemplate<String, Object> redisTemplate;
     private final VerificationCodeService verificationCodeService;
+    private final LoginGuardService loginGuardService;
 
     private static final String REFRESH_TOKEN_PREFIX = "auth:refresh:";
     private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
@@ -78,20 +79,35 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public LoginResponseDTO login(LoginDTO dto) {
+    public LoginResponseDTO login(LoginDTO dto, String clientIp) {
         String loginId = dto.getUsername();
+
+        long lockedMinutes = loginGuardService.lockRemainingMinutes(clientIp, loginId);
+        if (lockedMinutes > 0) {
+            throw BusinessException.tooManyRequests(
+                    "登录失败次数过多，请 " + lockedMinutes + " 分钟后再试");
+        }
+
         User user = (loginId.contains("@")
                 ? userRepository.findByEmail(loginId)
                 : userRepository.findByUsername(loginId))
-                .orElseThrow(() -> BusinessException.unauthorized("用户名或密码错误"));
+                .orElse(null);
+
+        if (user == null) {
+            loginGuardService.recordFailure(clientIp, loginId);
+            throw BusinessException.unauthorized("用户名或密码错误");
+        }
 
         if (user.getDeletedAt() != null) {
             throw BusinessException.unauthorized("账户已被删除");
         }
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
+            loginGuardService.recordFailure(clientIp, loginId);
             throw BusinessException.unauthorized("用户名或密码错误");
         }
+
+        loginGuardService.clearFailures(clientIp, loginId);
 
         String token = jwtService.generateToken(user.getId(), user.getRole());
         String refreshToken = jwtService.generateRefreshToken();
@@ -111,10 +127,19 @@ public class UserService {
     }
 
     @Transactional
-    public LoginResponseDTO guestLogin(GuestLoginDTO dto) {
+    public LoginResponseDTO guestLogin(GuestLoginDTO dto, String clientIp) {
+        long lockedMinutes = loginGuardService.lockRemainingMinutes(clientIp, dto.getEmail());
+        if (lockedMinutes > 0) {
+            throw BusinessException.tooManyRequests(
+                    "登录失败次数过多，请 " + lockedMinutes + " 分钟后再试");
+        }
+
         if (!verificationCodeService.verifyCode(dto.getEmail(), dto.getCode())) {
+            loginGuardService.recordFailure(clientIp, dto.getEmail());
             throw BusinessException.badRequest("验证码错误或已过期");
         }
+
+        loginGuardService.clearFailures(clientIp, dto.getEmail());
 
         User user = userRepository.findByEmail(dto.getEmail())
                 .orElseGet(() -> {

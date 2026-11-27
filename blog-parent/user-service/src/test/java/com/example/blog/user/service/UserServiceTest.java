@@ -33,6 +33,7 @@ class UserServiceTest {
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOperations;
     @Mock private VerificationCodeService verificationCodeService;
+    @Mock private LoginGuardService loginGuardService;
     @InjectMocks private UserService userService;
 
     private final UUID userId = UUID.randomUUID();
@@ -100,7 +101,7 @@ class UserServiceTest {
         when(jwtService.generateToken(userId, "blogger")).thenReturn("access-token");
         when(jwtService.generateRefreshToken()).thenReturn("refresh-token");
 
-        var result = userService.login(dto);
+        var result = userService.login(dto, "127.0.0.1");
 
         assertNotNull(result);
         assertEquals("access-token", result.getToken());
@@ -125,7 +126,8 @@ class UserServiceTest {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrongpass", "hashed")).thenReturn(false);
 
-        assertThrows(BusinessException.class, () -> userService.login(dto));
+        assertThrows(BusinessException.class, () -> userService.login(dto, "127.0.0.1"));
+        verify(loginGuardService).recordFailure("127.0.0.1", "testuser");
     }
 
     @Test

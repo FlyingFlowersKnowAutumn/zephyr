@@ -31,13 +31,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public Result<LoginResponseDTO> login(@Valid @RequestBody LoginDTO dto) {
-        return Result.success(userService.login(dto));
+    public Result<LoginResponseDTO> login(@Valid @RequestBody LoginDTO dto, HttpServletRequest request) {
+        return Result.success(userService.login(dto, resolveClientIp(request)));
     }
 
     @PostMapping("/guest-login")
-    public Result<LoginResponseDTO> guestLogin(@Valid @RequestBody GuestLoginDTO dto) {
-        return Result.success(userService.guestLogin(dto));
+    public Result<LoginResponseDTO> guestLogin(@Valid @RequestBody GuestLoginDTO dto, HttpServletRequest request) {
+        return Result.success(userService.guestLogin(dto, resolveClientIp(request)));
     }
 
     @PostMapping("/refresh")

@@ -66,6 +66,14 @@ jwt:
   expiration: 86400000
   refresh-expiration: 604800000
 
+security:
+  # 登录失败锁定：同一 IP 5 次 / 5 分钟，同一账号 10 次 / 15 分钟
+  login-lock:
+    ip-max-failures: ${LOGIN_LOCK_IP_MAX_FAILURES:5}
+    ip-lock-minutes: ${LOGIN_LOCK_IP_LOCK_MINUTES:5}
+    user-max-failures: ${LOGIN_LOCK_USER_MAX_FAILURES:10}
+    user-lock-minutes: ${LOGIN_LOCK_USER_LOCK_MINUTES:15}
+
 logging:
   level:
     com.example.blog.user: DEBUG
